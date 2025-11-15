@@ -1,0 +1,38 @@
+[package]
+name = "verification-lib"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/camelron/verification-lib"
+keywords = ["confidentiality", "sev-snp", "tpm"]
+description = "WASM-compatible library for SEV-SNP verification and related types"
+authors = ["Cameron Baird"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+# Shared
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sev = { version = "6.2.1", features = ["crypto_nossl", "snp"] }
+x509-cert = "0.2"
+asn1-rs = "0.6"
+hex = "0.4"
+sha2 = "0.10"
+base64 = "0.13"
+bitfield = "0.14"
+
+# WASM / pure-Rust crypto deps
+p384 = { version = "0.13", features = ["ecdsa"] }
+ecdsa = { version = "0.16", features = ["der", "verifying"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+
+# Logging / panic hooks for wasm
+log = "0.4"
+wasm-logger = "0.2"
+console_error_panic_hook = "0.1"
+pem = "3.0.6"
