@@ -4,21 +4,16 @@
 //! native service usage and for browser/WASM relying parties. For now it re-exports
 //! the `sev_verification` module which contains the verification engine.
 
-#[cfg(target_arch = "wasm32")]
 pub mod certificate_chain;
 
-#[cfg(target_arch = "wasm32")]
 pub mod kds;
 
-#[cfg(target_arch = "wasm32")]
 pub mod sev_verification;
 
-#[cfg(target_arch = "wasm32")]
 pub use sev::firmware::guest::AttestationReport;
 pub use x509_cert::Certificate;
 
 // Re-export the main types at crate root for convenient use (wasm only)
-#[cfg(target_arch = "wasm32")]
 pub use sev_verification::{SevVerifier, SevVerificationResult, SevVerificationDetails};
 pub use certificate_chain::AmdCertificates;
 

@@ -1,9 +1,4 @@
-#![cfg(target_arch = "wasm32")]
-
-//! WASM-only AMD SEV-SNP Attestation Verification
-//!
-//! This implementation is designed to be compiled only for wasm32 and uses
-//! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
+//! AMD SEV-SNP Attestation Verification
 use crate::AttestationReport;
 use crate::certificate_chain::AmdCertificates;
 
@@ -73,6 +68,7 @@ pub struct SevVerifier {
 
 impl SevVerifier {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::new().await?;
         Ok(Self {
@@ -81,6 +77,7 @@ impl SevVerifier {
     }
 
     pub async fn with_cache() -> Result<Self, Box<dyn std::error::Error>> {
+        #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::with_cache(true).await?;
         Ok(Self {
@@ -88,6 +85,7 @@ impl SevVerifier {
         })
     }
 
+    #[cfg(target_arch = "wasm32")]
     /// Initialize wasm logging and panic hook once. Only available when the
     /// `wasm` feature is enabled. No-op on non-wasm builds or when the feature
     /// isn't enabled.

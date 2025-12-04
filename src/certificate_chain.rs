@@ -6,7 +6,6 @@ use log::info;
 use std::collections::HashMap;
 
 /// AMD certificate chain representation for SEV-SNP verification
-#[cfg(target_arch = "wasm32")]
 pub struct AmdCertificates {
     /// AMD Root Key (ARK) certificate
     pub ark: Certificate,
@@ -18,7 +17,6 @@ pub struct AmdCertificates {
     fetcher: KdsFetcher,
 }
 
-#[cfg(target_arch = "wasm32")]
 impl AmdCertificates {
     /// Create a new AmdCertificates by fetching ARK and ASK from KDS
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
@@ -95,7 +93,6 @@ impl AmdCertificates {
 }
 
 /// Trait for fetching AMD certificates from a certificate source
-#[cfg(target_arch = "wasm32")]
 pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
@@ -111,7 +108,6 @@ pub(crate) trait CertificateFetcher {
 }
 
 /// Verify that subject is signed by issuer
-#[cfg(target_arch = "wasm32")]
 fn verify_signature(
     issuer: &Certificate,
     subject: &Certificate,

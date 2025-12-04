@@ -11,14 +11,12 @@ type ChainCache = Option<(Certificate, Certificate)>;
 
 /// KDS (Key Distribution Service) certificate fetcher
 /// Fetches certificates from AMD's public KDS service
-#[cfg(target_arch = "wasm32")]
 pub(crate) struct KdsFetcher {
     chain_cache: ChainCache,
     vcek_cache: std::collections::HashMap<String, Certificate>,
     use_cache: bool,
 }
 
-#[cfg(target_arch = "wasm32")]
 impl KdsFetcher {
     pub(crate) fn new() -> Self {
         Self {
@@ -37,7 +35,6 @@ impl KdsFetcher {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
@@ -169,6 +166,7 @@ extern "C" {
     fn fetch_bytes_promise(url: &str) -> Promise;
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let promise: Promise = fetch_bytes_promise(url);
     let js_val = JsFuture::from(promise)
@@ -178,4 +176,9 @@ async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error
     let mut vec = vec![0u8; u8arr.length() as usize];
     u8arr.copy_to(&mut vec[..]);
     Ok(vec)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+  Err("fetch_url_bytes is only implemented for wasm32 target".into())
 }
