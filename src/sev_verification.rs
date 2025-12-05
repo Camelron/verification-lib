@@ -281,8 +281,6 @@ impl SevVerifier {
         let vcek_x509 = X509::from_der(&vcek_der)
             .map_err(|e| format!("Failed to parse VCEK certificate with OpenSSL: {:?}", e))?;
 
-        println!("VCEK X509:\n{}", String::from_utf8_lossy(&vcek_x509.to_pem().unwrap()));
-
         // Extract EC public key from VCEK
         let vcek_pubkey = vcek_x509.public_key()
             .map_err(|e| format!("Failed to extract VCEK public key: {:?}", e))?;
@@ -312,9 +310,6 @@ impl SevVerifier {
 
         let digest = hash(MessageDigest::sha384(), report_without_sig)
             .map_err(|e| format!("Failed to compute SHA-384 hash: {:?}", e))?;
-
-        // print digest as hex
-        println!("Digest: {:}", hex::encode(&digest));
 
         // Verify signature directly using EC key
         let valid = ecdsa_sig.verify(&digest, &ec_key)

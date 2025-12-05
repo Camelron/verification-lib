@@ -1,10 +1,13 @@
-use crate::{AttestationReport, certificate_chain::CertificateFetcher};
-use x509_cert::{Certificate, der::{Decode, EncodePem}};
-use js_sys::{Promise, Uint8Array};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
+use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use hex;
+#[cfg(target_arch = "wasm32")]
+use js_sys::{Promise, Uint8Array};
 use log::info;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_futures::JsFuture;
+use x509_cert::{der::Decode, Certificate};
 
 /// Cache entry for certificate chain
 type ChainCache = Option<(Certificate, Certificate)>;
@@ -159,6 +162,7 @@ impl CertificateFetcher for KdsFetcher {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 /// wasm fetch helper
 #[wasm_bindgen]
 extern "C" {
@@ -180,14 +184,26 @@ async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    println!("Fetching URL: {}", url);
-    let response = reqwest::get(url).await?;
-    
-    if !response.status().is_success() {
-        return Err(format!("HTTP request failed with status: {}", response.status()).into());
+    use curl::easy::Easy;
+
+    let mut response_data = Vec::new();
+    let mut handle = Easy::new();
+    handle.url(url)?;
+    handle.follow_location(true)?;
+
+    {
+        let mut transfer = handle.transfer();
+        transfer.write_function(|data| {
+            response_data.extend_from_slice(data);
+            Ok(data.len())
+        })?;
+        transfer.perform()?;
     }
-    
-    let bytes = response.bytes().await?;
-    println!("Fetched {} bytes", bytes.len());
-    Ok(bytes.to_vec())
+
+    let response_code = handle.response_code()?;
+    if response_code != 200 {
+        return Err(format!("HTTP request failed with status: {}", response_code).into());
+    }
+
+    Ok(response_data)
 }
