@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "verify-cli"
+name = "verify-attestation"
 path = "src/bin/verify_cli.rs"
 
 [dependencies]
