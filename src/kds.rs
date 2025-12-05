@@ -1,5 +1,5 @@
 use crate::{AttestationReport, certificate_chain::CertificateFetcher};
-use x509_cert::{Certificate, der::Decode};
+use x509_cert::{Certificate, der::{Decode, EncodePem}};
 use js_sys::{Promise, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -180,5 +180,14 @@ async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-  Err("fetch_url_bytes is only implemented for wasm32 target".into())
+    println!("Fetching URL: {}", url);
+    let response = reqwest::get(url).await?;
+    
+    if !response.status().is_success() {
+        return Err(format!("HTTP request failed with status: {}", response.status()).into());
+    }
+    
+    let bytes = response.bytes().await?;
+    println!("Fetched {} bytes", bytes.len());
+    Ok(bytes.to_vec())
 }

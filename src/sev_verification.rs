@@ -4,7 +4,9 @@ use crate::certificate_chain::AmdCertificates;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
+#[cfg(target_arch = "wasm32")]
 use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+#[cfg(target_arch = "wasm32")]
 use sha2::{Digest, Sha384};
 use std::collections::HashMap;
 use x509_cert::Certificate;
@@ -221,6 +223,7 @@ impl SevVerifier {
         Ok(result)
     }
 
+    #[cfg(target_arch = "wasm32")]
     fn verify_attestation_signature(
         attestation_report: &AttestationReport,
         vcek: &Certificate,
@@ -257,6 +260,70 @@ impl SevVerifier {
             .map_err(|e| format!("Failed to parse VCEK public key: {:?}", e))?;
         vk.verify(&digest, &signature)
             .map_err(|_| "VEK did NOT sign the Attestation Report!")?;
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn verify_attestation_signature(
+        attestation_report: &AttestationReport,
+        vcek: &Certificate,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use openssl::ecdsa::EcdsaSig;
+        use openssl::bn::BigNum;
+        use openssl::x509::X509;
+        use openssl::hash::{hash, MessageDigest};
+        use x509_cert::der::Encode;
+
+        // Convert VCEK certificate to DER and parse with OpenSSL
+        let vcek_der = vcek
+            .to_der()
+            .map_err(|e| format!("Failed to encode VCEK certificate to DER: {:?}", e))?;
+        let vcek_x509 = X509::from_der(&vcek_der)
+            .map_err(|e| format!("Failed to parse VCEK certificate with OpenSSL: {:?}", e))?;
+
+        println!("VCEK X509:\n{}", String::from_utf8_lossy(&vcek_x509.to_pem().unwrap()));
+
+        // Extract EC public key from VCEK
+        let vcek_pubkey = vcek_x509.public_key()
+            .map_err(|e| format!("Failed to extract VCEK public key: {:?}", e))?;
+        let ec_key = vcek_pubkey.ec_key()
+            .map_err(|e| format!("Failed to get EC key from VCEK public key: {:?}", e))?;
+        ec_key.check_key().map_err(|e| format!("Invalid EC key: {:?}", e))?;
+
+        // Get signature components (R and S) from attestation report
+        // from_slice uses BN_bin2bn rather than BN_lebin2bn 
+        let mut r_bytes = attestation_report.signature.r().clone();
+        r_bytes.reverse();
+        let r = BigNum::from_slice(&r_bytes)
+            .map_err(|e| format!("Failed to create BigNum from R: {:?}", e))?;
+        let mut s_bytes = attestation_report.signature.s().clone();
+        s_bytes.reverse();
+        let s = BigNum::from_slice(&s_bytes)
+            .map_err(|e| format!("Failed to create BigNum from S: {:?}", e))?;
+
+        // Create ECDSA signature from R and S
+        let ecdsa_sig = EcdsaSig::from_private_components(r, s)
+            .map_err(|e| format!("Failed to create ECDSA signature: {:?}", e))?;
+
+        // Construct the canonical report bytes and extract the signed region
+        let mut report_bytes: Vec<u8> = Vec::new();
+        attestation_report.write_bytes(&mut report_bytes)?;
+        let report_without_sig = &report_bytes[0..0x29F+1];
+
+        let digest = hash(MessageDigest::sha384(), report_without_sig)
+            .map_err(|e| format!("Failed to compute SHA-384 hash: {:?}", e))?;
+
+        // print digest as hex
+        println!("Digest: {:}", hex::encode(&digest));
+
+        // Verify signature directly using EC key
+        let valid = ecdsa_sig.verify(&digest, &ec_key)
+            .map_err(|e| format!("Signature verification error: {:?}", e))?;
+
+        if !valid {
+            return Err("VCEK did NOT sign the Attestation Report!".into());
+        }
+
         Ok(())
     }
 

@@ -107,6 +107,7 @@ pub(crate) trait CertificateFetcher {
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
 }
 
+#[cfg(target_arch = "wasm32")]
 /// Verify that subject is signed by issuer
 fn verify_signature(
     issuer: &Certificate,
@@ -136,5 +137,44 @@ fn verify_signature(
     // Use p384's signature verification
     vk.verify(&subject_tbs, &sig)
         .map_err(|e| format!("Signature verification failed: {:?}", e))?;
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Verify that subject is signed by issuer using OpenSSL
+fn verify_signature(
+    issuer: &Certificate,
+    subject: &Certificate,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use openssl::x509::X509;
+    use openssl::pkey::PKey;
+
+    // Convert issuer certificate to DER and parse with OpenSSL
+    let issuer_der = issuer
+        .to_der()
+        .map_err(|e| format!("Failed to encode issuer certificate to DER: {:?}", e))?;
+    let issuer_x509 = X509::from_der(&issuer_der)
+        .map_err(|e| format!("Failed to parse issuer certificate with OpenSSL: {:?}", e))?;
+
+    // Extract public key from issuer
+    let issuer_pubkey: PKey<openssl::pkey::Public> = issuer_x509.public_key()
+        .map_err(|e| format!("Failed to extract issuer public key: {:?}", e))?;
+
+    // Convert subject certificate to DER and parse with OpenSSL
+    let subject_der = subject
+        .to_der()
+        .map_err(|e| format!("Failed to encode subject certificate to DER: {:?}", e))?;
+    let subject_x509 = X509::from_der(&subject_der)
+        .map_err(|e| format!("Failed to parse subject certificate with OpenSSL: {:?}", e))?;
+
+    // Verify the subject's signature using issuer's public key
+    let valid = subject_x509
+        .verify(&issuer_pubkey)
+        .map_err(|e| format!("Signature verification error: {:?}", e))?;
+
+    if !valid {
+        return Err("Signature verification failed: subject not signed by issuer".into());
+    }
+
     Ok(())
 }
