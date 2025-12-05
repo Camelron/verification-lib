@@ -1,4 +1,7 @@
-//! AMD SEV-SNP Attestation Verification
+//! WASM-only AMD SEV-SNP Attestation Verification
+//!
+//! This implementation is designed to be compiled only for wasm32 and uses
+//! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
 use crate::AttestationReport;
 use crate::certificate_chain::AmdCertificates;
 
