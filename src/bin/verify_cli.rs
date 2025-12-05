@@ -1,6 +1,9 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::env;
+#[cfg(not(target_arch = "wasm32"))]
 use verification_lib::{AttestationReport, SevVerifier};
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn verify(
     hex_input: &String,
 ) -> Result<verification_lib::SevVerificationResult, Box<dyn std::error::Error>> {
@@ -17,6 +20,7 @@ async fn verify(
     verifier.verify_attestation(&attestation_report).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
@@ -42,4 +46,10 @@ async fn main() {
             std::process::exit(1);
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    // CLI is not supported on WASM
+    panic!("verify-cli is not supported on wasm32 target");
 }
