@@ -274,18 +274,13 @@ impl SevVerifier {
         use openssl::hash::{hash, MessageDigest};
         use x509_cert::der::Encode;
 
-        // Convert VCEK certificate to DER and parse with OpenSSL
-        let vcek_der = vcek
-            .to_der()
-            .map_err(|e| format!("Failed to encode VCEK certificate to DER: {:?}", e))?;
-        let vcek_x509 = X509::from_der(&vcek_der)
-            .map_err(|e| format!("Failed to parse VCEK certificate with OpenSSL: {:?}", e))?;
+        let vcek_x509 = {
+            X509::from_der(&vcek.to_der()?)
+        }.map_err(|e| format!("Failed to parse VCEK certificate: {:?}", e))?;
 
-        // Extract EC public key from VCEK
-        let vcek_pubkey = vcek_x509.public_key()
-            .map_err(|e| format!("Failed to extract VCEK public key: {:?}", e))?;
-        let ec_key = vcek_pubkey.ec_key()
-            .map_err(|e| format!("Failed to get EC key from VCEK public key: {:?}", e))?;
+        let ec_key = {
+            vcek_x509.public_key()?.ec_key()
+        }.map_err(|e| format!("Failed to get EC key from VCEK public key: {:?}", e))?;
         ec_key.check_key().map_err(|e| format!("Invalid EC key: {:?}", e))?;
 
         // Get signature components (R and S) from attestation report

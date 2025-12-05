@@ -150,23 +150,16 @@ fn verify_signature(
     use openssl::x509::X509;
     use openssl::pkey::PKey;
 
-    // Convert issuer certificate to DER and parse with OpenSSL
-    let issuer_der = issuer
-        .to_der()
-        .map_err(|e| format!("Failed to encode issuer certificate to DER: {:?}", e))?;
-    let issuer_x509 = X509::from_der(&issuer_der)
-        .map_err(|e| format!("Failed to parse issuer certificate with OpenSSL: {:?}", e))?;
+    let issuer_x509 = {
+        X509::from_der(&issuer.to_der()?)
+    }.map_err(|e| format!("Failed to parse issuer certificate: {:?}", e))?;
 
-    // Extract public key from issuer
     let issuer_pubkey: PKey<openssl::pkey::Public> = issuer_x509.public_key()
         .map_err(|e| format!("Failed to extract issuer public key: {:?}", e))?;
 
-    // Convert subject certificate to DER and parse with OpenSSL
-    let subject_der = subject
-        .to_der()
-        .map_err(|e| format!("Failed to encode subject certificate to DER: {:?}", e))?;
-    let subject_x509 = X509::from_der(&subject_der)
-        .map_err(|e| format!("Failed to parse subject certificate with OpenSSL: {:?}", e))?;
+    let subject_x509 = {
+        X509::from_der(&subject.to_der()?)
+    }.map_err(|e| format!("Failed to parse subject certificate: {:?}", e))?;
 
     // Verify the subject's signature using issuer's public key
     let valid = subject_x509
