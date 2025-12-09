@@ -1176,7 +1176,6 @@ dependencies = [
  "hex",
  "js-sys",
  "log",
- "openssl",
  "p384",
  "pem",
  "serde",

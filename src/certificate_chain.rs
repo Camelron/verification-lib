@@ -108,67 +108,14 @@ pub(crate) trait CertificateFetcher {
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
 }
 
-#[cfg(target_arch = "wasm32")]
 /// Verify that subject is signed by issuer
 fn verify_signature(
     issuer: &Certificate,
     subject: &Certificate,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Extract public key from issuer certificate
-    let issuer_pub = issuer
-        .tbs_certificate
-        .subject_public_key_info
-        .subject_public_key
-        .raw_bytes();
-
-    // Get TBS (to-be-signed) certificate bytes from subject
-    let subject_tbs = subject
-        .tbs_certificate
-        .to_der()
-        .map_err(|e| format!("Failed to encode TBS certificate: {:?}", e))?;
-
-    // Extract signature bytes from subject certificate
-    let sig_bytes = subject.signature.raw_bytes();
-
-    let vk = VerifyingKey::from_sec1_bytes(issuer_pub)
-        .map_err(|e| format!("Failed to parse issuer public key: {:?}", e))?;
-    let sig = Signature::from_der(sig_bytes)
-        .map_err(|e| format!("Failed to parse signature DER: {:?}", e))?;
-
-    // Use p384's signature verification
-    vk.verify(&subject_tbs, &sig)
-        .map_err(|e| format!("Signature verification failed: {:?}", e))?;
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-/// Verify that subject is signed by issuer using OpenSSL
-fn verify_signature(
-    issuer: &Certificate,
-    subject: &Certificate,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use openssl::x509::X509;
-    use openssl::pkey::PKey;
-
-    let issuer_x509 = {
-        X509::from_der(&issuer.to_der()?)
-    }.map_err(|e| format!("Failed to parse issuer certificate: {:?}", e))?;
-
-    let issuer_pubkey: PKey<openssl::pkey::Public> = issuer_x509.public_key()
-        .map_err(|e| format!("Failed to extract issuer public key: {:?}", e))?;
-
-    let subject_x509 = {
-        X509::from_der(&subject.to_der()?)
-    }.map_err(|e| format!("Failed to parse subject certificate: {:?}", e))?;
-
-    // Verify the subject's signature using issuer's public key
-    let valid = subject_x509
-        .verify(&issuer_pubkey)
-        .map_err(|e| format!("Signature verification error: {:?}", e))?;
-
-    if !valid {
-        return Err("Signature verification failed: subject not signed by issuer".into());
-    }
-
-    Ok(())
+    use sev::certs::snp::Verifiable;
+    use sev::certs::snp::Certificate as SevCertificate;
+    let issuer = SevCertificate::from_der(&issuer.to_der()?)?;
+    let subject = SevCertificate::from_der(&subject.to_der()?)?;
+    Ok((&issuer, &subject).verify().map_err(|e| format!("Error while verifying signature: {}", e))?)
 }

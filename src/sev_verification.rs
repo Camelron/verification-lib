@@ -226,98 +226,13 @@ impl SevVerifier {
         Ok(result)
     }
 
-    #[cfg(target_arch = "wasm32")]
     fn verify_attestation_signature(
-        attestation_report: &AttestationReport,
-        vcek: &Certificate,
+      attestation_report: &AttestationReport,
+      vcek: &Certificate,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Extract VCEK public key (SEC1-encoded)
-        let vcek_pub = vcek
-            .tbs_certificate
-            .subject_public_key_info
-            .subject_public_key
-            .raw_bytes();
-
-        // Serialize the signature to get its byte representation
-        // The sev signature is 144 bytes: 72 bytes R + 72 bytes S
-        let sig_serialized = serde_json::to_vec(&attestation_report.signature)
-            .map_err(|e| format!("Failed to serialize signature: {:?}", e))?;
-        
-        // Parse as a P384 signature - try both DER and raw slice formats
-        let signature = Signature::from_der(&sig_serialized)
-            .or_else(|_| Signature::from_slice(&sig_serialized))
-            .map_err(|e| format!("Failed to parse signature: {:?}", e))?;
-
-        // 1) Construct the canonical report bytes and extract the signed region
-        let mut report_bytes: Vec<u8> = Vec::new();
-        attestation_report.write_bytes(&mut report_bytes)?;
-        let signed_bytes = &report_bytes[0x0..0x2A0];
-
-        // 2) Create hash digest
-        let mut hasher = Sha384::new();
-        hasher.update(signed_bytes);
-        let digest = hasher.finalize();
-
-        // 3) Verify signature using p384 verifying key derived from VCEK
-        let vk = VerifyingKey::from_sec1_bytes(&vcek_pub)
-            .map_err(|e| format!("Failed to parse VCEK public key: {:?}", e))?;
-        vk.verify(&digest, &signature)
-            .map_err(|_| "VEK did NOT sign the Attestation Report!")?;
-        Ok(())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn verify_attestation_signature(
-        attestation_report: &AttestationReport,
-        vcek: &Certificate,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use openssl::ecdsa::EcdsaSig;
-        use openssl::bn::BigNum;
-        use openssl::x509::X509;
-        use openssl::hash::{hash, MessageDigest};
-        use x509_cert::der::Encode;
-
-        let vcek_x509 = {
-            X509::from_der(&vcek.to_der()?)
-        }.map_err(|e| format!("Failed to parse VCEK certificate: {:?}", e))?;
-
-        let ec_key = {
-            vcek_x509.public_key()?.ec_key()
-        }.map_err(|e| format!("Failed to get EC key from VCEK public key: {:?}", e))?;
-        ec_key.check_key().map_err(|e| format!("Invalid EC key: {:?}", e))?;
-
-        // Get signature components (R and S) from attestation report
-        // from_slice uses BN_bin2bn rather than BN_lebin2bn 
-        let mut r_bytes = attestation_report.signature.r().clone();
-        r_bytes.reverse();
-        let r = BigNum::from_slice(&r_bytes)
-            .map_err(|e| format!("Failed to create BigNum from R: {:?}", e))?;
-        let mut s_bytes = attestation_report.signature.s().clone();
-        s_bytes.reverse();
-        let s = BigNum::from_slice(&s_bytes)
-            .map_err(|e| format!("Failed to create BigNum from S: {:?}", e))?;
-
-        // Create ECDSA signature from R and S
-        let ecdsa_sig = EcdsaSig::from_private_components(r, s)
-            .map_err(|e| format!("Failed to create ECDSA signature: {:?}", e))?;
-
-        // Construct the canonical report bytes and extract the signed region
-        let mut report_bytes: Vec<u8> = Vec::new();
-        attestation_report.write_bytes(&mut report_bytes)?;
-        let report_without_sig = &report_bytes[0..0x29F+1];
-
-        let digest = hash(MessageDigest::sha384(), report_without_sig)
-            .map_err(|e| format!("Failed to compute SHA-384 hash: {:?}", e))?;
-
-        // Verify signature directly using EC key
-        let valid = ecdsa_sig.verify(&digest, &ec_key)
-            .map_err(|e| format!("Signature verification error: {:?}", e))?;
-
-        if !valid {
-            return Err("VCEK did NOT sign the Attestation Report!".into());
-        }
-
-        Ok(())
+        use sev::certs::snp::Verifiable;
+        let vcek = sev::certs::snp::Certificate::from_der(&x509_cert::der::Encode::to_der(vcek)?)?;
+        Ok((&vcek, attestation_report).verify().map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
     }
 
     fn verify_tcb_values(
