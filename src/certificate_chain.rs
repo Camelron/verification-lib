@@ -113,9 +113,11 @@ fn verify_signature(
     issuer: &Certificate,
     subject: &Certificate,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use sev::certs::snp::Verifiable;
     use sev::certs::snp::Certificate as SevCertificate;
+    use sev::certs::snp::Verifiable;
     let issuer = SevCertificate::from_der(&issuer.to_der()?)?;
     let subject = SevCertificate::from_der(&subject.to_der()?)?;
-    Ok((&issuer, &subject).verify().map_err(|e| format!("Error while verifying signature: {}", e))?)
+    Ok((&issuer, &subject)
+        .verify()
+        .map_err(|e| format!("Error while verifying signature: {}", e))?)
 }

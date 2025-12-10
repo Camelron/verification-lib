@@ -227,12 +227,14 @@ impl SevVerifier {
     }
 
     fn verify_attestation_signature(
-      attestation_report: &AttestationReport,
-      vcek: &Certificate,
+        attestation_report: &AttestationReport,
+        vcek: &Certificate,
     ) -> Result<(), Box<dyn std::error::Error>> {
         use sev::certs::snp::Verifiable;
         let vcek = sev::certs::snp::Certificate::from_der(&x509_cert::der::Encode::to_der(vcek)?)?;
-        Ok((&vcek, attestation_report).verify().map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
+        Ok((&vcek, attestation_report)
+            .verify()
+            .map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
     }
 
     fn verify_tcb_values(

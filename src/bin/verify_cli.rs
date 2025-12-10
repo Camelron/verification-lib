@@ -34,8 +34,8 @@ async fn main() {
 
     match verify(hex_input).await {
         Ok(res) if res.is_valid => {
-                println!("Verification successful");
-                std::process::exit(0);
+            println!("Verification successful");
+            std::process::exit(0);
         }
         Ok(res) => {
             eprintln!("Verification failed:\n{:?}", res);
