@@ -27,7 +27,7 @@ jobs:
         run: |
           cargo fmt -- --check
 
-  format:
+  wasm-build:
     name: WASM build
     runs-on: ubuntu-latest
 
