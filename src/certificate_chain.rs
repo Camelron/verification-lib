@@ -3,13 +3,18 @@ use crate::AttestationReport;
 use log::info;
 use std::collections::HashMap;
 use x509_cert::{der::Encode, Certificate};
+use std::mem::discriminant;
 
-/// AMD certificate chain representation for SEV-SNP verification
-pub struct AmdCertificates {
+pub struct Chain {
     /// AMD Root Key (ARK) certificate
     pub ark: Certificate,
     /// AMD SEV Key (ASK) certificate
     pub ask: Certificate,
+}
+
+/// AMD certificate chain representation for SEV-SNP verification
+pub struct AmdCertificates {
+    pub chains_cache: Vec<(sev::Generation, Chain)>,
     /// Versioned Chip Endorsement Key (VCEK) certificates by processor model
     vcek_cache: HashMap<String, Certificate>,
     /// Certificate fetcher
@@ -25,39 +30,56 @@ impl AmdCertificates {
     /// Create a new AmdCertificates with caching enabled
     pub async fn with_cache(use_cache: bool) -> Result<Self, Box<dyn std::error::Error>> {
         // Create fetcher
-        let mut fetcher = if use_cache {
+        let fetcher = if use_cache {
             KdsFetcher::with_cache()
         } else {
             KdsFetcher::new()
         };
 
-        // Fetch ARK and ASK
-        let (ark, ask) = fetcher.fetch_amd_chain().await?;
-
-        // Verify that ASK is signed by ARK
-        verify_signature(&ark, &ask)?;
-        // Verify that ARK is self-signed
-        verify_signature(&ark, &ark)?;
-        info!("AMD certificate chain (ARK/ASK) verified successfully");
-
         Ok(Self {
-            ark,
-            ask,
+            chains_cache: Vec::new(),
             vcek_cache: HashMap::new(),
             fetcher,
         })
     }
 
+    async fn get_chain(
+        &mut self,
+        processor_model: sev::Generation,
+    ) -> Result<&Chain, Box<dyn std::error::Error>> {
+        let existing_indx = self
+            .chains_cache
+            .iter()
+            .position(|(gen, _)| discriminant(gen) == discriminant(&processor_model));
+
+        if let Some(indx) = existing_indx {
+            return Ok(&self.chains_cache[indx].1);
+        }
+
+        let (ark, ask) = self
+            .fetcher
+            .fetch_amd_chain(processor_model)
+            .await
+            .map_err(|e| format!("Error fetching chain: {}", e))?;
+
+        verify_signature(&ark, &ask)?;
+
+        let chain = Chain { ark, ask };
+
+        self.chains_cache.push((processor_model, chain));
+        Ok(&self.chains_cache.last().unwrap().1)
+    }
+
     /// Get or fetch the VCEK certificate for a given processor model and attestation report
     pub async fn get_vcek(
         &mut self,
-        processor_model: &str,
+        processor_model: sev::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<&Certificate, Box<dyn std::error::Error>> {
         // Build cache key from processor model and chip_id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model,
+            processor_model.titlecase(),
             &attestation_report.chip_id[..8]
         );
 
@@ -70,10 +92,11 @@ impl AmdCertificates {
                 .await?;
 
             // Verify that VCEK is signed by ASK
-            verify_signature(&self.ask, &vcek)?;
+            let chain = self.get_chain(processor_model).await?;
+            verify_signature(&chain.ask, &vcek)?;
             info!(
                 "VCEK certificate verified successfully for {}",
-                processor_model
+                processor_model.titlecase()
             );
 
             // Store in cache
@@ -100,12 +123,13 @@ pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
         &mut self,
+        model: sev::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>>;
 
     /// Fetch VCEK certificate for a given processor model and attestation report
     async fn fetch_amd_vcek(
         &mut self,
-        processor_model: &str,
+        model: sev::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
 }

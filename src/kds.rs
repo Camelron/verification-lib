@@ -1,4 +1,4 @@
-use crate::{certificate_chain::CertificateFetcher, AttestationReport};
+use crate::{AttestationReport, certificate_chain::CertificateFetcher};
 use hex;
 #[cfg(target_arch = "wasm32")]
 use js_sys::{Promise, Uint8Array};
@@ -41,6 +41,7 @@ impl KdsFetcher {
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
+        model: sev::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>> {
         // Check cache for ARK/ASK
         if self.use_cache {
@@ -50,10 +51,11 @@ impl CertificateFetcher for KdsFetcher {
             }
         }
 
-        // Fetch PEM chain from KDS - use Milan as default processor model
-        // TODO: rework to support other models (not just Milan)
-        let cert_chain_url = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain";
-        let pem_bytes = fetch_url_bytes(cert_chain_url).await?;
+        let cert_chain_url = format!(
+            "https://kdsintf.amd.com/vcek/v1/{}/cert_chain",
+            model.titlecase()
+        );
+        let pem_bytes = fetch_url_bytes(&cert_chain_url).await?;
         let pems = pem::parse_many(&pem_bytes)
             .map_err(|e| format!("Failed to parse PEM certificates: {}", e))?;
         if pems.len() < 2 {
@@ -78,13 +80,13 @@ impl CertificateFetcher for KdsFetcher {
 
     async fn fetch_amd_vcek(
         &mut self,
-        processor_model: &str,
+        processor_model: sev::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>> {
         // Build a cache key using processor model and first 8 bytes of the chip id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model,
+            processor_model.titlecase(),
             &attestation_report.chip_id[..8]
         );
 
@@ -104,7 +106,7 @@ impl CertificateFetcher for KdsFetcher {
             );
         } else {
             match processor_model {
-                "Turin" => {
+                sev::Generation::Turin => {
                     // Turin uses only first 8 bytes of chip_id
                     hex::encode(&attestation_report.chip_id[0..8]).to_uppercase()
                 }
@@ -116,7 +118,7 @@ impl CertificateFetcher for KdsFetcher {
         };
 
         let vcek_url = match processor_model {
-            "Turin" => {
+            sev::Generation::Turin => {
                 // Turin requires FMC parameter
                 let fmc = attestation_report
                     .reported_tcb
@@ -124,7 +126,7 @@ impl CertificateFetcher for KdsFetcher {
                     .ok_or("A Turin processor must have a fmc value")?;
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?fmcSPL={:02}&blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model,
+                    processor_model.titlecase(),
                     chip_id_hex,
                     fmc,
                     attestation_report.reported_tcb.bootloader,
@@ -137,7 +139,7 @@ impl CertificateFetcher for KdsFetcher {
                 // Milan and Genoa don't use FMC parameter
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model,
+                    processor_model.titlecase(),
                     chip_id_hex,
                     attestation_report.reported_tcb.bootloader,
                     attestation_report.reported_tcb.tee,
