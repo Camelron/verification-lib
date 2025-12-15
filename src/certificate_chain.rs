@@ -1,9 +1,6 @@
-use x509_cert::{Certificate, der::Encode};
-use crate::AttestationReport;
 use crate::kds::KdsFetcher;
 use crate::AttestationReport;
 use log::info;
-use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 use std::collections::HashMap;
 use x509_cert::{der::Encode, Certificate};
 

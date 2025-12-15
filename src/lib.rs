@@ -14,9 +14,7 @@ pub use sev::firmware::guest::AttestationReport;
 pub use x509_cert::Certificate;
 
 // Re-export the main types at crate root for convenient use (wasm only)
-pub use sev_verification::{SevVerifier, SevVerificationResult, SevVerificationDetails};
 pub use certificate_chain::AmdCertificates;
-#[cfg(target_arch = "wasm32")]
 pub use sev_verification::{SevVerificationDetails, SevVerificationResult, SevVerifier};
 
 #[cfg(target_arch = "wasm32")]
