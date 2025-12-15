@@ -1,6 +1,4 @@
 use x509_cert::{Certificate, der::Encode};
-#[cfg(target_arch = "wasm32")]
-use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
 use crate::AttestationReport;
 use crate::kds::KdsFetcher;
 use log::info;

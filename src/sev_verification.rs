@@ -7,10 +7,6 @@ use crate::certificate_chain::AmdCertificates;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
-#[cfg(target_arch = "wasm32")]
-use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
-#[cfg(target_arch = "wasm32")]
-use sha2::{Digest, Sha384};
 use std::collections::HashMap;
 use x509_cert::Certificate;
 
