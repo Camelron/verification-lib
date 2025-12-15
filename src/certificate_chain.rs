@@ -1,8 +1,11 @@
 use x509_cert::{Certificate, der::Encode};
 use crate::AttestationReport;
 use crate::kds::KdsFetcher;
+use crate::AttestationReport;
 use log::info;
+use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 use std::collections::HashMap;
+use x509_cert::{der::Encode, Certificate};
 
 /// AMD certificate chain representation for SEV-SNP verification
 pub struct AmdCertificates {
@@ -64,13 +67,17 @@ impl AmdCertificates {
         // Check if we already have this VCEK
         if !self.vcek_cache.contains_key(&cache_key) {
             // Fetch the VCEK
-            let vcek = self.fetcher
+            let vcek = self
+                .fetcher
                 .fetch_amd_vcek(processor_model, attestation_report)
                 .await?;
 
             // Verify that VCEK is signed by ASK
             verify_signature(&self.ask, &vcek)?;
-            info!("VCEK certificate verified successfully for {}", processor_model);
+            info!(
+                "VCEK certificate verified successfully for {}",
+                processor_model
+            );
 
             // Store in cache
             self.vcek_cache.insert(cache_key.clone(), vcek);

@@ -2,8 +2,8 @@
 //!
 //! This implementation is designed to be compiled only for wasm32 and uses
 //! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
-use crate::AttestationReport;
 use crate::certificate_chain::AmdCertificates;
+use crate::AttestationReport;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
@@ -72,18 +72,14 @@ impl SevVerifier {
         #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::new().await?;
-        Ok(Self {
-            amd_certificates,
-        })
+        Ok(Self { amd_certificates })
     }
 
     pub async fn with_cache() -> Result<Self, Box<dyn std::error::Error>> {
         #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::with_cache(true).await?;
-        Ok(Self {
-            amd_certificates,
-        })
+        Ok(Self { amd_certificates })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -274,7 +270,10 @@ impl SevVerifier {
 
         let bl_oid = SnpOid::BootLoader.oid().to_string();
         if let Some(&cert_bl) = ext_map.get(&bl_oid) {
-            if !check_ext(cert_bl, &attestation_report.reported_tcb.bootloader.to_le_bytes()) {
+            if !check_ext(
+                cert_bl,
+                &attestation_report.reported_tcb.bootloader.to_le_bytes(),
+            ) {
                 return Err("Report TCB Boot Loader and Certificate Boot Loader mismatch".into());
             }
         }
