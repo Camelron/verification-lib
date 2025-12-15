@@ -1,10 +1,10 @@
-use crate::{AttestationReport, certificate_chain::CertificateFetcher};
-use x509_cert::{Certificate, der::Decode};
+use crate::{certificate_chain::CertificateFetcher, AttestationReport};
+use hex;
 use js_sys::{Promise, Uint8Array};
+use log::info;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use hex;
-use log::info;
+use x509_cert::{der::Decode, Certificate};
 
 /// Cache entry for certificate chain
 type ChainCache = Option<(Certificate, Certificate)>;

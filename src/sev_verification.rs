@@ -4,12 +4,12 @@
 //!
 //! This implementation is designed to be compiled only for wasm32 and uses
 //! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
-use crate::AttestationReport;
 use crate::certificate_chain::AmdCertificates;
+use crate::AttestationReport;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
-use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 use sha2::{Digest, Sha384};
 use std::collections::HashMap;
 use x509_cert::Certificate;
@@ -75,17 +75,13 @@ impl SevVerifier {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::new().await?;
-        Ok(Self {
-            amd_certificates,
-        })
+        Ok(Self { amd_certificates })
     }
 
     pub async fn with_cache() -> Result<Self, Box<dyn std::error::Error>> {
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::with_cache(true).await?;
-        Ok(Self {
-            amd_certificates,
-        })
+        Ok(Self { amd_certificates })
     }
 
     /// Initialize wasm logging and panic hook once. Only available when the
@@ -238,7 +234,7 @@ impl SevVerifier {
         // The sev signature is 144 bytes: 72 bytes R + 72 bytes S
         let sig_serialized = serde_json::to_vec(&attestation_report.signature)
             .map_err(|e| format!("Failed to serialize signature: {:?}", e))?;
-        
+
         // Parse as a P384 signature - try both DER and raw slice formats
         let signature = Signature::from_der(&sig_serialized)
             .or_else(|_| Signature::from_slice(&sig_serialized))
@@ -303,7 +299,10 @@ impl SevVerifier {
 
         let bl_oid = SnpOid::BootLoader.oid().to_string();
         if let Some(&cert_bl) = ext_map.get(&bl_oid) {
-            if !check_ext(cert_bl, &attestation_report.reported_tcb.bootloader.to_le_bytes()) {
+            if !check_ext(
+                cert_bl,
+                &attestation_report.reported_tcb.bootloader.to_le_bytes(),
+            ) {
                 return Err("Report TCB Boot Loader and Certificate Boot Loader mismatch".into());
             }
         }
