@@ -52,7 +52,7 @@ jobs:
         run: |
           rustup update stable && rustup default stable
 
-      - name: Check build
+      - name: Check build and test
         run: |
           cargo build
           cargo test
