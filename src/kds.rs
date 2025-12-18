@@ -1,8 +1,11 @@
 use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use hex;
+#[cfg(target_arch = "wasm32")]
 use js_sys::{Promise, Uint8Array};
 use log::info;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 use x509_cert::{der::Decode, Certificate};
 
@@ -11,14 +14,12 @@ type ChainCache = Option<(Certificate, Certificate)>;
 
 /// KDS (Key Distribution Service) certificate fetcher
 /// Fetches certificates from AMD's public KDS service
-#[cfg(target_arch = "wasm32")]
 pub(crate) struct KdsFetcher {
     chain_cache: ChainCache,
     vcek_cache: std::collections::HashMap<String, Certificate>,
     use_cache: bool,
 }
 
-#[cfg(target_arch = "wasm32")]
 impl KdsFetcher {
     pub(crate) fn new() -> Self {
         Self {
@@ -37,7 +38,6 @@ impl KdsFetcher {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
@@ -162,6 +162,7 @@ impl CertificateFetcher for KdsFetcher {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 /// wasm fetch helper
 #[wasm_bindgen]
 extern "C" {
@@ -169,6 +170,7 @@ extern "C" {
     fn fetch_bytes_promise(url: &str) -> Promise;
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let promise: Promise = fetch_bytes_promise(url);
     let js_val = JsFuture::from(promise)
@@ -178,4 +180,30 @@ async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error
     let mut vec = vec![0u8; u8arr.length() as usize];
     u8arr.copy_to(&mut vec[..]);
     Ok(vec)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    use curl::easy::Easy;
+
+    let mut response_data = Vec::new();
+    let mut handle = Easy::new();
+    handle.url(url)?;
+    handle.follow_location(true)?;
+
+    {
+        let mut transfer = handle.transfer();
+        transfer.write_function(|data| {
+            response_data.extend_from_slice(data);
+            Ok(data.len())
+        })?;
+        transfer.perform()?;
+    }
+
+    let response_code = handle.response_code()?;
+    if response_code != 200 {
+        return Err(format!("HTTP request failed with status: {}", response_code).into());
+    }
+
+    Ok(response_data)
 }

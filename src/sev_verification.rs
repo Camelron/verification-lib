@@ -1,5 +1,3 @@
-#![cfg(target_arch = "wasm32")]
-
 //! WASM-only AMD SEV-SNP Attestation Verification
 //!
 //! This implementation is designed to be compiled only for wasm32 and uses
@@ -9,8 +7,6 @@ use crate::AttestationReport;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
-use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
-use sha2::{Digest, Sha384};
 use std::collections::HashMap;
 use x509_cert::Certificate;
 
@@ -73,17 +69,20 @@ pub struct SevVerifier {
 
 impl SevVerifier {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::new().await?;
         Ok(Self { amd_certificates })
     }
 
     pub async fn with_cache() -> Result<Self, Box<dyn std::error::Error>> {
+        #[cfg(target_arch = "wasm32")]
         Self::init_wasm_logging();
         let amd_certificates = AmdCertificates::with_cache(true).await?;
         Ok(Self { amd_certificates })
     }
 
+    #[cfg(target_arch = "wasm32")]
     /// Initialize wasm logging and panic hook once. Only available when the
     /// `wasm` feature is enabled. No-op on non-wasm builds or when the feature
     /// isn't enabled.
@@ -223,39 +222,11 @@ impl SevVerifier {
         attestation_report: &AttestationReport,
         vcek: &Certificate,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Extract VCEK public key (SEC1-encoded)
-        let vcek_pub = vcek
-            .tbs_certificate
-            .subject_public_key_info
-            .subject_public_key
-            .raw_bytes();
-
-        // Serialize the signature to get its byte representation
-        // The sev signature is 144 bytes: 72 bytes R + 72 bytes S
-        let sig_serialized = serde_json::to_vec(&attestation_report.signature)
-            .map_err(|e| format!("Failed to serialize signature: {:?}", e))?;
-
-        // Parse as a P384 signature - try both DER and raw slice formats
-        let signature = Signature::from_der(&sig_serialized)
-            .or_else(|_| Signature::from_slice(&sig_serialized))
-            .map_err(|e| format!("Failed to parse signature: {:?}", e))?;
-
-        // 1) Construct the canonical report bytes and extract the signed region
-        let mut report_bytes: Vec<u8> = Vec::new();
-        attestation_report.write_bytes(&mut report_bytes)?;
-        let signed_bytes = &report_bytes[0x0..0x2A0];
-
-        // 2) Create hash digest
-        let mut hasher = Sha384::new();
-        hasher.update(signed_bytes);
-        let digest = hasher.finalize();
-
-        // 3) Verify signature using p384 verifying key derived from VCEK
-        let vk = VerifyingKey::from_sec1_bytes(&vcek_pub)
-            .map_err(|e| format!("Failed to parse VCEK public key: {:?}", e))?;
-        vk.verify(&digest, &signature)
-            .map_err(|_| "VEK did NOT sign the Attestation Report!")?;
-        Ok(())
+        use sev::certs::snp::Verifiable;
+        let vcek = sev::certs::snp::Certificate::from_der(&x509_cert::der::Encode::to_der(vcek)?)?;
+        Ok((&vcek, attestation_report)
+            .verify()
+            .map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
     }
 
     fn verify_tcb_values(

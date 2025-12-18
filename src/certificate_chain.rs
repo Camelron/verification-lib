@@ -1,12 +1,10 @@
 use crate::kds::KdsFetcher;
 use crate::AttestationReport;
 use log::info;
-use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
 use std::collections::HashMap;
 use x509_cert::{der::Encode, Certificate};
 
 /// AMD certificate chain representation for SEV-SNP verification
-#[cfg(target_arch = "wasm32")]
 pub struct AmdCertificates {
     /// AMD Root Key (ARK) certificate
     pub ark: Certificate,
@@ -18,7 +16,6 @@ pub struct AmdCertificates {
     fetcher: KdsFetcher,
 }
 
-#[cfg(target_arch = "wasm32")]
 impl AmdCertificates {
     /// Create a new AmdCertificates by fetching ARK and ASK from KDS
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
@@ -99,7 +96,6 @@ impl AmdCertificates {
 }
 
 /// Trait for fetching AMD certificates from a certificate source
-#[cfg(target_arch = "wasm32")]
 pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
@@ -115,34 +111,15 @@ pub(crate) trait CertificateFetcher {
 }
 
 /// Verify that subject is signed by issuer
-#[cfg(target_arch = "wasm32")]
 fn verify_signature(
     issuer: &Certificate,
     subject: &Certificate,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Extract public key from issuer certificate
-    let issuer_pub = issuer
-        .tbs_certificate
-        .subject_public_key_info
-        .subject_public_key
-        .raw_bytes();
-
-    // Get TBS (to-be-signed) certificate bytes from subject
-    let subject_tbs = subject
-        .tbs_certificate
-        .to_der()
-        .map_err(|e| format!("Failed to encode TBS certificate: {:?}", e))?;
-
-    // Extract signature bytes from subject certificate
-    let sig_bytes = subject.signature.raw_bytes();
-
-    let vk = VerifyingKey::from_sec1_bytes(issuer_pub)
-        .map_err(|e| format!("Failed to parse issuer public key: {:?}", e))?;
-    let sig = Signature::from_der(sig_bytes)
-        .map_err(|e| format!("Failed to parse signature DER: {:?}", e))?;
-
-    // Use p384's signature verification
-    vk.verify(&subject_tbs, &sig)
-        .map_err(|e| format!("Signature verification failed: {:?}", e))?;
-    Ok(())
+    use sev::certs::snp::Certificate as SevCertificate;
+    use sev::certs::snp::Verifiable;
+    let issuer = SevCertificate::from_der(&issuer.to_der()?)?;
+    let subject = SevCertificate::from_der(&subject.to_der()?)?;
+    Ok((&issuer, &subject)
+        .verify()
+        .map_err(|e| format!("Error while verifying signature: {}", e))?)
 }
