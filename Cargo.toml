@@ -15,6 +15,9 @@ path = "src/lib.rs"
 name = "verify-attestation"
 path = "src/bin/verify_cli.rs"
 
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [dependencies]
 # Shared
 serde = { version = "1.0", features = ["derive"] }
