@@ -169,12 +169,16 @@ impl SevVerifier {
             }
         }
 
-        let processor_model = result.details.processor_model.as_ref().unwrap();
+        let processor_model = sev::Generation::identify_cpu(
+            attestation_report.cpuid_fam_id.unwrap(),
+            attestation_report.cpuid_mod_id.unwrap(),
+        )
+        .map_err(|e| format!("Unsupported processor model: {}", e))?;
 
         // Step 2: Get VCEK certificate for this processor (includes chain verification)
         let vcek = match self
             .amd_certificates
-            .get_vcek(&processor_model, attestation_report)
+            .get_vcek(processor_model, attestation_report)
             .await
         {
             Ok(cert) => {
@@ -253,6 +257,13 @@ impl SevVerifier {
             if ext_value == expected {
                 return true;
             }
+            // prefix match
+            if ext_value.len() < expected.len()
+                && ext_value == &expected[..ext_value.len()]
+                && expected[ext_value.len()..].iter().all(|e| *e == 0)
+            {
+                return true;
+            }
             // Try with INTEGER tag (0x02) wrapper
             if ext_value.len() >= 2 && ext_value[0] == 0x02 {
                 if let Some(&last) = ext_value.last() {
@@ -300,6 +311,27 @@ impl SevVerifier {
             ) {
                 return Err("Report TCB Microcode and Certificate Microcode mismatch".into());
             }
+        }
+
+        let gen = sev::Generation::identify_cpu(
+            attestation_report.cpuid_fam_id.unwrap(),
+            attestation_report.cpuid_mod_id.unwrap(),
+        )
+        .map_err(|e| format!("Failed to parse cpu: {}", e))?;
+
+        match gen {
+            sev::Generation::Turin => {
+                let fmc_oid = SnpOid::Fmc.oid().to_string();
+                if let Some(&cert_fmc) = ext_map.get(&fmc_oid) {
+                    if !check_ext(
+                        cert_fmc,
+                        &attestation_report.reported_tcb.fmc.unwrap().to_le_bytes(),
+                    ) {
+                        return Err("Report TCB FMC and Certificate FMC mismatch".into());
+                    }
+                }
+            }
+            _ => (),
         }
 
         let hwid_oid = SnpOid::HwId.oid().to_string();
