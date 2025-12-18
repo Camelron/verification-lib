@@ -7,6 +7,11 @@ keywords = ["confidentiality", "sev-snp", "tpm"]
 description = "WASM-compatible library for SEV-SNP verification and related types"
 authors = ["Cameron Baird"]
 
+[features]
+default = ["crypto_openssl"]
+crypto_openssl = ["dep:openssl"]
+crypto_pure_rust = []
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
@@ -45,3 +50,4 @@ pem = "3.0.6"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 curl = "0.4"
+openssl = { version = "0.10", optional = true }
