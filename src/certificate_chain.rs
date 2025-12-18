@@ -2,8 +2,8 @@ use crate::kds::KdsFetcher;
 use crate::AttestationReport;
 use log::info;
 use std::collections::HashMap;
-use x509_cert::{der::Encode, Certificate};
 use std::mem::discriminant;
+use x509_cert::{der::Encode, Certificate};
 
 pub struct Chain {
     /// AMD Root Key (ARK) certificate

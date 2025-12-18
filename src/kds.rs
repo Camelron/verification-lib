@@ -1,4 +1,4 @@
-use crate::{AttestationReport, certificate_chain::CertificateFetcher};
+use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use hex;
 #[cfg(target_arch = "wasm32")]
 use js_sys::{Promise, Uint8Array};
