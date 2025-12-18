@@ -41,6 +41,7 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           cargo build --target wasm32-unknown-unknown
+          wasm-pack test --node
 
   build:
     name: build
