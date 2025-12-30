@@ -4,8 +4,8 @@
 //! native service usage and for browser/WASM relying parties. For now it re-exports
 //! the `sev_verification` module which contains the verification engine.
 
-pub mod snp_report;
 pub mod crypto;
+pub mod snp_report;
 
 pub mod certificate_chain;
 
