@@ -40,10 +40,10 @@ jobs:
       - name: Check build wasm
         run: |
           rustup target add wasm32-unknown-unknown
-          cargo build --target wasm32-unknown-unknown
+          cargo build --target wasm32-unknown-unknown --features "crypto_pure_rust"
 
-  build:
-    name: build
+  native-openssl:
+    name: Native openssl
     runs-on: ubuntu-latest
 
     steps:
@@ -52,7 +52,22 @@ jobs:
         run: |
           rustup update stable && rustup default stable
 
-      - name: Check build and test
+      - name: Check build with openssl
         run: |
-          cargo build
-          cargo test
+          cargo build --features "crypto_openssl"
+          cargo test --features "crypto_openssl"
+
+  native-pure-rust:
+    name: Native pure-rust
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust
+        run: |
+          rustup update stable && rustup default stable
+
+      - name: Check build with pure_rust crypto
+        run: |
+          cargo build --features "crypto_pure_rust"
+          cargo test --features "crypto_pure_rust"
