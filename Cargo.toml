@@ -18,12 +18,9 @@ path = "src/bin/verify_cli.rs"
 
 
 [features]
-default = ["crypto_pure_rust"]
-# No default - consumers should pick based on platform:
-#   Native:  features = ["crypto_openssl"]
-#   WASM:    features = ["crypto_pure_rust"]
+default = []
 crypto_openssl = ["dep:openssl"]
-crypto_pure_rust = ["dep:p384", "dep:ecdsa", "dep:rsa"]
+crypto_pure_rust = ["dep:ecdsa", "dep:rsa"]
 
 [dependencies]
 # Shared
@@ -38,8 +35,8 @@ base64 = "0.13"
 bitfield = "0.14"
 
 # Crypto
+p384 = { version = "0.13", features = ["ecdsa"]} # optional after sev removal
 openssl = { version = "0.10", optional = true }
-p384 = { version = "0.13", features = ["ecdsa"], optional = true }
 ecdsa = { version = "0.16", features = ["der", "verifying"], optional = true }
 rsa = { version = "0.9", optional = true }
 

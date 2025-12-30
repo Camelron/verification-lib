@@ -1,13 +1,10 @@
-use std::vec;
-
 use p384::ecdsa::VerifyingKey as EcdsaVerifyingKey;
 use rsa::{
     pss::{Signature as PssSignature, VerifyingKey as PssVerifyingKey},
     RsaPublicKey,
 };
 use sha2::Sha384;
-use x509_cert::der::{referenced::OwnedToRef, Decode, DecodePem, Encode};
-use zerocopy::IntoBytes;
+use x509_cert::der::{referenced::OwnedToRef, Encode};
 
 use super::super::snp_report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
@@ -236,6 +233,7 @@ mod test {
             .clone();
 
         // Corrupt a byte in the signed portion
+        use zerocopy::IntoBytes;
         let report_bytes = report.as_mut_bytes();
         report_bytes[100] ^= 0xFF;
 

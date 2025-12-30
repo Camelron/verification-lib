@@ -1,5 +1,12 @@
 //! Crypto module for verification-lib.
 
+// Ensure exactly one crypto backend is enabled
+#[cfg(all(feature = "crypto_openssl", feature = "crypto_pure_rust"))]
+compile_error!("Features `crypto_openssl` and `crypto_pure_rust` are mutually exclusive. Please enable only one.");
+
+#[cfg(not(any(feature = "crypto_openssl", feature = "crypto_pure_rust")))]
+compile_error!("Either `crypto_openssl` or `crypto_pure_rust` feature must be enabled.");
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 use super::snp_report::AttestationReport;
