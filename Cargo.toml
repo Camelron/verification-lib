@@ -46,6 +46,8 @@ wasm-logger = "0.2"
 console_error_panic_hook = "0.1"
 pem = "3.0.6"
 
+zerocopy = {version = "0.8.31", features = ["derive"]}
+
 # Native CLI deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
