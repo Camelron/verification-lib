@@ -1179,6 +1179,7 @@ dependencies = [
  "openssl",
  "p384",
  "pem",
+ "rsa",
  "serde",
  "serde_json",
  "sev",

@@ -7,10 +7,6 @@ keywords = ["confidentiality", "sev-snp", "tpm"]
 description = "WASM-compatible library for SEV-SNP verification and related types"
 authors = ["Cameron Baird"]
 
-[features]
-default = ["crypto_openssl"]
-crypto_openssl = ["dep:openssl"]
-crypto_pure_rust = []
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -19,6 +15,15 @@ path = "src/lib.rs"
 [[bin]]
 name = "verify-attestation"
 path = "src/bin/verify_cli.rs"
+
+
+[features]
+default = ["crypto_pure_rust"]
+# No default - consumers should pick based on platform:
+#   Native:  features = ["crypto_openssl"]
+#   WASM:    features = ["crypto_pure_rust"]
+crypto_openssl = ["dep:openssl"]
+crypto_pure_rust = ["dep:p384", "dep:ecdsa", "dep:rsa"]
 
 [dependencies]
 # Shared
@@ -32,9 +37,13 @@ sha2 = "0.10"
 base64 = "0.13"
 bitfield = "0.14"
 
+# Crypto
+openssl = { version = "0.10", optional = true }
+p384 = { version = "0.13", features = ["ecdsa"], optional = true }
+ecdsa = { version = "0.16", features = ["der", "verifying"], optional = true }
+rsa = { version = "0.9", optional = true }
+
 # WASM / pure-Rust crypto deps
-p384 = { version = "0.13", features = ["ecdsa"] }
-ecdsa = { version = "0.16", features = ["der", "verifying"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
@@ -52,4 +61,3 @@ zerocopy = {version = "0.8.31", features = ["derive"]}
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 curl = "0.4"
-openssl = { version = "0.10", optional = true }

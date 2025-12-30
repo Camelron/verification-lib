@@ -19,10 +19,12 @@ pub trait CryptoBackend {
     ) -> Result<()>;
 }
 
+#[cfg(feature = "crypto_openssl")]
 mod crypto_openssl;
 #[cfg(feature = "crypto_openssl")]
 pub use crypto_openssl::Crypto;
 
-//mod crypto_nossl;
-//#[cfg(feature = "crypto_pure_rust")]
-//pub use crypto_nossl::Crypto;
+#[cfg(feature = "crypto_pure_rust")]
+mod crypto_nossl;
+#[cfg(feature = "crypto_pure_rust")]
+pub use crypto_nossl::Crypto;

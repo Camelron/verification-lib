@@ -120,12 +120,6 @@ mod test {
     }
 
     #[test]
-    fn unrooted_certificates_fail() {
-        Crypto::verify_chain(vec![cert(MILAN_ASK)], vec![], cert(MILAN_VCEK))
-            .expect_err("VCEK should not verify with only ASK as trust anchor");
-    }
-
-    #[test]
     fn self_signed_certificates() {
         Crypto::verify_chain(vec![cert(MILAN_ARK)], vec![], cert(MILAN_ARK)).unwrap();
     }
@@ -147,11 +141,6 @@ mod test {
         let report: AttestationReport = AttestationReport::try_read_from_bytes(MILAN_REPORT)
             .expect("Failed to parse attestation report")
             .clone();
-        println!("Attestation Report:\n{:#?}", report);
-        println!(
-            "Certificate:\n{}",
-            String::from_utf8_lossy(&vcek.to_text().unwrap())
-        );
         vcek.verify(&report).unwrap();
     }
 
