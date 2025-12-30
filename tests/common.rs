@@ -22,3 +22,11 @@ pub async fn verify_attestation_hex(hex_input: &str) -> Result<SevVerificationRe
 pub async fn verify_milan_attestation() -> Result<SevVerificationResult, String> {
     verify_attestation_hex(MILAN_ATTESTATION).await
 }
+
+pub async fn verify_genoa_attestation() -> Result<SevVerificationResult, String> {
+    verify_attestation_hex(GENOA_ATTESTATION).await
+}
+
+pub async fn verify_turin_attestation() -> Result<SevVerificationResult, String> {
+    verify_attestation_hex(TURIN_ATTESTATION).await
+}
