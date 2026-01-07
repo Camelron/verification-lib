@@ -7,6 +7,7 @@ keywords = ["confidentiality", "sev-snp", "tpm"]
 description = "WASM-compatible library for SEV-SNP verification and related types"
 authors = ["Cameron Baird"]
 
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
@@ -14,6 +15,12 @@ path = "src/lib.rs"
 [[bin]]
 name = "verify-attestation"
 path = "src/bin/verify_cli.rs"
+
+[features]
+default = ["crypto_pure_rust"]
+# If both enabled, defaults to crypto_pure_rust but expose the crypto_openssl module
+crypto_openssl = ["dep:openssl"]
+crypto_pure_rust = ["dep:ecdsa", "dep:rsa"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
@@ -30,9 +37,13 @@ sha2 = "0.10"
 base64 = "0.13"
 bitfield = "0.14"
 
+# Crypto
+p384 = { version = "0.13", features = ["ecdsa"]} # optional after sev removal
+openssl = { version = "0.10", optional = true }
+ecdsa = { version = "0.16", features = ["der", "verifying"], optional = true }
+rsa = { version = "0.9", optional = true }
+
 # WASM / pure-Rust crypto deps
-p384 = { version = "0.13", features = ["ecdsa"] }
-ecdsa = { version = "0.16", features = ["der", "verifying"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
@@ -43,6 +54,8 @@ log = "0.4"
 wasm-logger = "0.2"
 console_error_panic_hook = "0.1"
 pem = "3.0.6"
+
+zerocopy = {version = "0.8.31", features = ["derive"]}
 
 # Native CLI deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
