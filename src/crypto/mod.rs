@@ -2,7 +2,8 @@
 
 #[cfg(not(any(feature = "crypto_openssl", feature = "crypto_pure_rust")))]
 compile_error!("Either `crypto_openssl` or `crypto_pure_rust` feature must be enabled.");
-
+#[cfg(all(target_arch = "wasm32", feature = "crypto_openssl"))]
+compile_error!("`crypto_openssl` is not supported on wasm32 targets. Use `crypto_pure_rust` instead.");
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 use super::snp_report::AttestationReport;
