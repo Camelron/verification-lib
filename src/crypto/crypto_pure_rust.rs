@@ -52,22 +52,6 @@ impl Verifier<Certificate> for Certificate {
                 .map_err(|e| format!("RSA-PSS signature verification failed: {:?}", e))?;
 
             Ok(())
-        } else if *sig_algo_oid == oid::ECDSA_WITH_SHA384 {
-            // ECDSA P-384 with SHA-384
-            use p384::ecdsa::signature::Verifier;
-
-            let pub_key_bytes = issuer_spki.subject_public_key.raw_bytes();
-
-            let vk = EcdsaVerifyingKey::from_sec1_bytes(pub_key_bytes)
-                .map_err(|e| format!("Failed to parse ECDSA public key: {:?}", e))?;
-
-            let sig = p384::ecdsa::Signature::from_der(sig_bytes)
-                .map_err(|e| format!("Failed to parse ECDSA signature DER: {:?}", e))?;
-
-            vk.verify(&tbs_bytes, &sig)
-                .map_err(|e| format!("ECDSA signature verification failed: {:?}", e))?;
-
-            Ok(())
         } else {
             Err(format!("Unsupported signature algorithm OID: {}", sig_algo_oid).into())
         }

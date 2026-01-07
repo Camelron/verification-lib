@@ -1,9 +1,5 @@
 //! Crypto module for verification-lib.
 
-// Ensure exactly one crypto backend is enabled
-#[cfg(all(feature = "crypto_openssl", feature = "crypto_pure_rust"))]
-compile_error!("Features `crypto_openssl` and `crypto_pure_rust` are mutually exclusive. Please enable only one.");
-
 #[cfg(not(any(feature = "crypto_openssl", feature = "crypto_pure_rust")))]
 compile_error!("Either `crypto_openssl` or `crypto_pure_rust` feature must be enabled.");
 
@@ -26,12 +22,13 @@ pub trait CryptoBackend {
     ) -> Result<()>;
 }
 
+#[cfg(feature = "crypto_pure_rust")]
+mod crypto_pure_rust;
 #[cfg(feature = "crypto_openssl")]
 mod crypto_openssl;
-#[cfg(feature = "crypto_openssl")]
-pub use crypto_openssl::Crypto;
 
+// If pure rust crypto is enabled export it, otherwise export openssl crypto
 #[cfg(feature = "crypto_pure_rust")]
-mod crypto_nossl;
-#[cfg(feature = "crypto_pure_rust")]
-pub use crypto_nossl::Crypto;
+pub use crypto_pure_rust::Crypto;
+#[cfg(all(feature = "crypto_openssl", not(feature = "crypto_pure_rust")))]
+pub use crypto_openssl::Crypto;
