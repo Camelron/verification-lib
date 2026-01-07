@@ -2,6 +2,7 @@ use std::vec;
 
 use openssl::ecdsa::EcdsaSig;
 use openssl::stack::Stack;
+use x509_cert::der::Encode;
 
 use super::super::snp_report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
@@ -32,6 +33,13 @@ impl CryptoBackend for Crypto {
             Ok(false) => Err("Certificate verification failed".into()),
             Err(e) => Err(Box::new(e)),
         }
+    }
+
+    fn from_x509_cert(cert: &x509_cert::Certificate) -> Result<Self::Certificate> {
+        let der = cert.to_der()
+            .map_err(|e| format!("Failed to encode certificate to DER: {:?}", e))?;
+        openssl::x509::X509::from_der(&der)
+            .map_err(|e| format!("Failed to parse certificate from DER: {:?}", e).into())
     }
 }
 

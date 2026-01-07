@@ -96,6 +96,11 @@ impl CryptoBackend for Crypto {
         }
         Ok(())
     }
+
+    fn from_x509_cert(cert: &x509_cert::Certificate) -> Result<Self::Certificate> {
+        // Pure-rust backend already uses x509_cert::Certificate, so just clone
+        Ok(cert.clone())
+    }
 }
 
 fn verify_report_sig_ecdsa_p384_sha384(

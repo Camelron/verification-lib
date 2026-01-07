@@ -7,7 +7,7 @@ compile_error!("Features `crypto_openssl` and `crypto_pure_rust` are mutually ex
 #[cfg(not(any(feature = "crypto_openssl", feature = "crypto_pure_rust")))]
 compile_error!("Either `crypto_openssl` or `crypto_pure_rust` feature must be enabled.");
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 use super::snp_report::AttestationReport;
 
@@ -24,6 +24,9 @@ pub trait CryptoBackend {
         untrusted_chain: Vec<Self::Certificate>,
         leaf: Self::Certificate,
     ) -> Result<()>;
+
+    /// Convert from x509_cert::Certificate to the backend's native certificate type
+    fn from_x509_cert(cert: &x509_cert::Certificate) -> Result<Self::Certificate>;
 }
 
 #[cfg(feature = "crypto_openssl")]
