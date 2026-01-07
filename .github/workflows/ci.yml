@@ -40,7 +40,10 @@ jobs:
       - name: Check build wasm
         run: |
           rustup target add wasm32-unknown-unknown
-          cargo build --target wasm32-unknown-unknown --features "crypto_pure_rust"
+          cargo install wasm-bindgen-cli
+          cargo install wasm-pack
+          cargo build --target wasm32-unknown-unknown
+          wasm-pack test --node
 
   native-openssl:
     name: Native openssl
@@ -54,8 +57,8 @@ jobs:
 
       - name: Check build with openssl
         run: |
-          cargo build --features "crypto_openssl"
-          cargo test --features "crypto_openssl"
+          cargo build --no-default-features --features "crypto_openssl"
+          cargo test --no-default-features --features "crypto_openssl"
 
   native-pure-rust:
     name: Native pure-rust
@@ -69,5 +72,5 @@ jobs:
 
       - name: Check build with pure_rust crypto
         run: |
-          cargo build --features "crypto_pure_rust"
-          cargo test --features "crypto_pure_rust"
+          cargo build --no-default-features --features "crypto_pure_rust"
+          cargo test --no-default-features --features "crypto_pure_rust"

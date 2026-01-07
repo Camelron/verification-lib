@@ -16,12 +16,14 @@ path = "src/lib.rs"
 name = "verify-attestation"
 path = "src/bin/verify_cli.rs"
 
-
 [features]
 default = ["crypto_pure_rust"]
 # If both enabled, defaults to crypto_pure_rust but expose the crypto_openssl module
 crypto_openssl = ["dep:openssl"]
 crypto_pure_rust = ["dep:ecdsa", "dep:rsa"]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [dependencies]
 # Shared

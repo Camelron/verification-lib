@@ -6,6 +6,8 @@ use log::info;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
 use x509_cert::{der::Decode, Certificate};
 
@@ -41,6 +43,7 @@ impl KdsFetcher {
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
+        model: sev::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>> {
         // Check cache for ARK/ASK
         if self.use_cache {
@@ -50,10 +53,11 @@ impl CertificateFetcher for KdsFetcher {
             }
         }
 
-        // Fetch PEM chain from KDS - use Milan as default processor model
-        // TODO: rework to support other models (not just Milan)
-        let cert_chain_url = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain";
-        let pem_bytes = fetch_url_bytes(cert_chain_url).await?;
+        let cert_chain_url = format!(
+            "https://kdsintf.amd.com/vcek/v1/{}/cert_chain",
+            model.titlecase()
+        );
+        let pem_bytes = fetch_url_bytes(&cert_chain_url).await?;
         let pems = pem::parse_many(&pem_bytes)
             .map_err(|e| format!("Failed to parse PEM certificates: {}", e))?;
         if pems.len() < 2 {
@@ -78,13 +82,13 @@ impl CertificateFetcher for KdsFetcher {
 
     async fn fetch_amd_vcek(
         &mut self,
-        processor_model: &str,
+        processor_model: sev::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>> {
         // Build a cache key using processor model and first 8 bytes of the chip id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model,
+            processor_model.titlecase(),
             &attestation_report.chip_id[..8]
         );
 
@@ -104,7 +108,7 @@ impl CertificateFetcher for KdsFetcher {
             );
         } else {
             match processor_model {
-                "Turin" => {
+                sev::Generation::Turin => {
                     // Turin uses only first 8 bytes of chip_id
                     hex::encode(&attestation_report.chip_id[0..8]).to_uppercase()
                 }
@@ -116,7 +120,7 @@ impl CertificateFetcher for KdsFetcher {
         };
 
         let vcek_url = match processor_model {
-            "Turin" => {
+            sev::Generation::Turin => {
                 // Turin requires FMC parameter
                 let fmc = attestation_report
                     .reported_tcb
@@ -124,7 +128,7 @@ impl CertificateFetcher for KdsFetcher {
                     .ok_or("A Turin processor must have a fmc value")?;
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?fmcSPL={:02}&blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model,
+                    processor_model.titlecase(),
                     chip_id_hex,
                     fmc,
                     attestation_report.reported_tcb.bootloader,
@@ -137,7 +141,7 @@ impl CertificateFetcher for KdsFetcher {
                 // Milan and Genoa don't use FMC parameter
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model,
+                    processor_model.titlecase(),
                     chip_id_hex,
                     attestation_report.reported_tcb.bootloader,
                     attestation_report.reported_tcb.tee,
@@ -163,20 +167,52 @@ impl CertificateFetcher for KdsFetcher {
 }
 
 #[cfg(target_arch = "wasm32")]
-/// wasm fetch helper
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_name = __patty_fetch_bytes)]
-    fn fetch_bytes_promise(url: &str) -> Promise;
-}
-
-#[cfg(target_arch = "wasm32")]
 async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let promise: Promise = fetch_bytes_promise(url);
-    let js_val = JsFuture::from(promise)
+    // Use globalThis.fetch so this works in both browser and Node (wasm-bindgen-test runner)
+    let global = js_sys::global();
+    let fetch = js_sys::Reflect::get(&global, &JsValue::from_str("fetch"))
+        .map_err(|_| "globalThis.fetch is not available")?;
+    let fetch_fn: js_sys::Function = fetch
+        .dyn_into()
+        .map_err(|_| "globalThis.fetch is not a function")?;
+
+    let fetch_promise: Promise = fetch_fn
+        .call1(&global, &JsValue::from_str(url))
+        .map_err(|e| format!("JS fetch invocation error: {:?}", e))?
+        .dyn_into()
+        .map_err(|_| "fetch() did not return a Promise")?;
+
+    let resp = JsFuture::from(fetch_promise)
         .await
         .map_err(|e| format!("JS fetch error: {:?}", e))?;
-    let u8arr = Uint8Array::new(&js_val);
+
+    // If response.ok is false, surface status for easier debugging
+    if let Ok(ok) = js_sys::Reflect::get(&resp, &JsValue::from_str("ok")) {
+        if ok.as_bool() == Some(false) {
+            let status = js_sys::Reflect::get(&resp, &JsValue::from_str("status"))
+                .ok()
+                .and_then(|v| v.as_f64())
+                .map(|v| v as u16);
+            return Err(format!("HTTP request failed (status={:?})", status).into());
+        }
+    }
+
+    let array_buffer = js_sys::Reflect::get(&resp, &JsValue::from_str("arrayBuffer"))
+        .map_err(|_| "fetch Response.arrayBuffer is not available")?;
+    let array_buffer_fn: js_sys::Function = array_buffer
+        .dyn_into()
+        .map_err(|_| "Response.arrayBuffer is not a function")?;
+
+    let ab_promise: Promise = array_buffer_fn
+        .call0(&resp)
+        .map_err(|e| format!("Response.arrayBuffer() threw: {:?}", e))?
+        .dyn_into()
+        .map_err(|_| "Response.arrayBuffer() did not return a Promise")?;
+    let ab = JsFuture::from(ab_promise)
+        .await
+        .map_err(|e| format!("arrayBuffer await failed: {:?}", e))?;
+
+    let u8arr = Uint8Array::new(&ab);
     let mut vec = vec![0u8; u8arr.length() as usize];
     u8arr.copy_to(&mut vec[..]);
     Ok(vec)
