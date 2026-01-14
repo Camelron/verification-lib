@@ -18,9 +18,6 @@ mod oid {
 
     // RSA-PSS (1.2.840.113549.1.1.10)
     pub const RSA_PSS: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.10");
-    // ECDSA with SHA-384 (1.2.840.10045.4.3.3)
-    pub const ECDSA_WITH_SHA384: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3");
 }
 
 impl Verifier<Certificate> for Certificate {

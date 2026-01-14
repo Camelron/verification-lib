@@ -13,10 +13,11 @@ pub struct TcbVersionMilanGenoa {
 #[derive(Debug, Clone, Copy, IntoBytes, FromBytes)]
 #[repr(C)]
 pub struct TcbVersionTurin {
+    pub fmc: u8,
     pub boot_loader: u8,
     pub tee: u8,
-    reserved: [u8; 4],
     pub snp: u8,
+    reserved: [u8; 3],
     pub microcode: u8,
 }
 

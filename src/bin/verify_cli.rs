@@ -7,10 +7,12 @@ use verification_lib::{AttestationReport, SevVerifier};
 async fn verify(
     hex_input: &String,
 ) -> Result<verification_lib::SevVerificationResult, Box<dyn std::error::Error>> {
+    use zerocopy::FromBytes;
+
     let bytes = hex::decode(hex_input).map_err(|e| format!("Serialisation error: {}", e))?;
     // Parse the bytes as an AttestationReport
-    let attestation_report: AttestationReport = AttestationReport::from_bytes(&bytes)
-        .map_err(|e| format!("Failed to parse attestation report: {}", e))?;
+    let attestation_report = AttestationReport::read_from_bytes(&bytes)
+        .map_err(|e| format!("Failed to parse attestation report from bytes: {:?}", e))?;
 
     // Create verifier and run verification
     let mut verifier = SevVerifier::new()

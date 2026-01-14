@@ -1,5 +1,6 @@
-use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use crate::crypto::{Certificate, Crypto, CryptoBackend};
+use crate::snp_cpuid;
+use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use hex;
 #[cfg(target_arch = "wasm32")]
 use js_sys::{Promise, Uint8Array};
@@ -43,7 +44,7 @@ impl KdsFetcher {
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
-        model: sev::Generation,
+        model: snp_cpuid::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>> {
         // Check cache for ARK/ASK
         if self.use_cache {
@@ -53,10 +54,7 @@ impl CertificateFetcher for KdsFetcher {
             }
         }
 
-        let cert_chain_url = format!(
-            "https://kdsintf.amd.com/vcek/v1/{}/cert_chain",
-            model.titlecase()
-        );
+        let cert_chain_url = format!("https://kdsintf.amd.com/vcek/v1/{}/cert_chain", model);
         let pem_bytes = fetch_url_bytes(&cert_chain_url).await?;
         let pems = pem::parse_many(&pem_bytes)
             .map_err(|e| format!("Failed to parse PEM certificates: {}", e))?;
@@ -82,13 +80,13 @@ impl CertificateFetcher for KdsFetcher {
 
     async fn fetch_amd_vcek(
         &mut self,
-        processor_model: sev::Generation,
+        processor_model: snp_cpuid::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>> {
         // Build a cache key using processor model and first 8 bytes of the chip id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model.titlecase(),
+            processor_model,
             &attestation_report.chip_id[..8]
         );
 
@@ -108,45 +106,41 @@ impl CertificateFetcher for KdsFetcher {
             );
         } else {
             match processor_model {
-                sev::Generation::Turin => {
-                    // Turin uses only first 8 bytes of chip_id
-                    hex::encode(&attestation_report.chip_id[0..8]).to_uppercase()
-                }
-                _ => {
+                snp_cpuid::Generation::Milan | snp_cpuid::Generation::Genoa => {
                     // Milan and Genoa use full chip_id
                     hex::encode(&attestation_report.chip_id.as_ref()).to_uppercase()
+                }
+                _ => {
+                    // Turin uses only first 8 bytes of chip_id
+                    hex::encode(&attestation_report.chip_id[0..8]).to_uppercase()
                 }
             }
         };
 
         let vcek_url = match processor_model {
-            sev::Generation::Turin => {
-                // Turin requires FMC parameter
-                let fmc = attestation_report
-                    .reported_tcb
-                    .fmc
-                    .ok_or("A Turin processor must have a fmc value")?;
+            snp_cpuid::Generation::Milan | snp_cpuid::Generation::Genoa => {
+                let tcb = attestation_report.reported_tcb.as_milan_genoa();
+                format!(
+                "https://kdsintf.amd.com/vcek/v1/{}/{}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
+                processor_model,
+                chip_id_hex,
+                tcb.boot_loader,
+                tcb.tee,
+                tcb.snp,
+                tcb.microcode
+            )
+            }
+            snp_cpuid::Generation::Turin => {
+                let tcb = attestation_report.reported_tcb.as_turin();
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?fmcSPL={:02}&blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model.titlecase(),
+                    processor_model,
                     chip_id_hex,
-                    fmc,
-                    attestation_report.reported_tcb.bootloader,
-                    attestation_report.reported_tcb.tee,
-                    attestation_report.reported_tcb.snp,
-                    attestation_report.reported_tcb.microcode
-                )
-            }
-            _ => {
-                // Milan and Genoa don't use FMC parameter
-                format!(
-                    "https://kdsintf.amd.com/vcek/v1/{}/{}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
-                    processor_model.titlecase(),
-                    chip_id_hex,
-                    attestation_report.reported_tcb.bootloader,
-                    attestation_report.reported_tcb.tee,
-                    attestation_report.reported_tcb.snp,
-                    attestation_report.reported_tcb.microcode
+                    tcb.fmc,
+                    tcb.boot_loader,
+                    tcb.tee,
+                    tcb.snp,
+                    tcb.microcode
                 )
             }
         };

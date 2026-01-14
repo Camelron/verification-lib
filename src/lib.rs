@@ -6,6 +6,7 @@
 
 pub mod crypto;
 pub mod snp_report;
+pub mod snp_cpuid;
 
 pub mod certificate_chain;
 
@@ -13,8 +14,8 @@ pub mod kds;
 
 pub mod sev_verification;
 
-pub use sev::firmware::guest::AttestationReport;
-pub use x509_cert::Certificate;
+pub use snp_report::AttestationReport;
+pub use crypto::Certificate;
 
 // Re-export the main types at crate root for convenient use (wasm only)
 pub use certificate_chain::AmdCertificates;

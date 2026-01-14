@@ -29,7 +29,6 @@ wasm-bindgen-test = "0.3"
 # Shared
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sev = { version = "6.2.1", features = ["crypto_nossl", "snp"] }
 x509-cert = "0.2"
 asn1-rs = "0.6"
 hex = "0.4"

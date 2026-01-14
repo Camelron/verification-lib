@@ -1,6 +1,6 @@
 use crate::crypto::{Certificate, Verifier};
 use crate::kds::KdsFetcher;
-use crate::AttestationReport;
+use crate::{snp_cpuid, AttestationReport};
 use log::info;
 use std::collections::HashMap;
 use std::mem::discriminant;
@@ -14,7 +14,7 @@ pub struct Chain {
 
 /// AMD certificate chain representation for SEV-SNP verification
 pub struct AmdCertificates {
-    pub chains_cache: Vec<(sev::Generation, Chain)>,
+    pub chains_cache: Vec<(snp_cpuid::Generation, Chain)>,
     /// Versioned Chip Endorsement Key (VCEK) certificates by processor model
     vcek_cache: HashMap<String, Certificate>,
     /// Certificate fetcher
@@ -45,7 +45,7 @@ impl AmdCertificates {
 
     async fn get_chain(
         &mut self,
-        processor_model: sev::Generation,
+        processor_model: snp_cpuid::Generation,
     ) -> Result<&Chain, Box<dyn std::error::Error>> {
         let existing_indx = self
             .chains_cache
@@ -74,13 +74,13 @@ impl AmdCertificates {
     /// Get or fetch the VCEK certificate for a given processor model and attestation report
     pub async fn get_vcek(
         &mut self,
-        processor_model: sev::Generation,
+        processor_model: snp_cpuid::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<&Certificate, Box<dyn std::error::Error>> {
         // Build cache key from processor model and chip_id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model.titlecase(),
+            processor_model,
             &attestation_report.chip_id[..8]
         );
 
@@ -101,8 +101,8 @@ impl AmdCertificates {
 
             info!(
                 "VCEK certificate verified successfully for {}",
-                processor_model.titlecase()
-           );
+                processor_model
+            );
 
             // Store in cache
             self.vcek_cache.insert(cache_key.clone(), vcek);
@@ -128,13 +128,13 @@ pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
         &mut self,
-        model: sev::Generation,
+        model: snp_cpuid::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>>;
 
     /// Fetch VCEK certificate for a given processor model and attestation report
     async fn fetch_amd_vcek(
         &mut self,
-        model: sev::Generation,
+        model: snp_cpuid::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
 }
