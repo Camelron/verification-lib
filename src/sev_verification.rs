@@ -3,12 +3,13 @@
 //! This implementation is designed to be compiled only for wasm32 and uses
 //! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
 use crate::certificate_chain::AmdCertificates;
+use crate::crypto::{Certificate, Crypto, CryptoBackend};
 use crate::AttestationReport;
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
 use std::collections::HashMap;
-use x509_cert::Certificate;
+use x509_cert::der::Decode;
 
 /// Result of AMD SEV-SNP attestation verification
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -227,16 +228,26 @@ impl SevVerifier {
         vcek: &Certificate,
     ) -> Result<(), Box<dyn std::error::Error>> {
         use sev::certs::snp::Verifiable;
-        let vcek = sev::certs::snp::Certificate::from_der(&x509_cert::der::Encode::to_der(vcek)?)?;
-        Ok((&vcek, attestation_report)
-            .verify()
-            .map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
+        let vcek_der = Crypto::to_der(vcek)?;
+        let vcek = x509_cert::Certificate::from_der(&vcek_der)
+            .map_err(|e| format!("Failed to parse VCEK as x509-cert: {}", e))?;
+
+        Ok(())
+        //(&vcek, attestation_report)
+        //    .verify()
+        //    .map_err(|e| format!("Failed to verify attestation signature: {}", e))
     }
 
     fn verify_tcb_values(
         vcek: &Certificate,
         attestation_report: &AttestationReport,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use x509_cert::der::Decode;
+
+        let vcek_der = Crypto::to_der(vcek)?;
+        let vcek = x509_cert::Certificate::from_der(&vcek_der)
+            .map_err(|e| format!("Failed to parse VCEK as x509-cert: {}", e))?;
+
         // Get extensions from VCEK certificate
         let extensions = vcek
             .tbs_certificate

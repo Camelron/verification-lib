@@ -1,9 +1,9 @@
+use crate::crypto::{Certificate, Verifier};
 use crate::kds::KdsFetcher;
 use crate::AttestationReport;
 use log::info;
 use std::collections::HashMap;
 use std::mem::discriminant;
-use x509_cert::{der::Encode, Certificate};
 
 pub struct Chain {
     /// AMD Root Key (ARK) certificate
@@ -62,7 +62,8 @@ impl AmdCertificates {
             .await
             .map_err(|e| format!("Error fetching chain: {}", e))?;
 
-        verify_signature(&ark, &ask)?;
+        ark.verify(&ask)
+            .map_err(|e| format!("Failed to verify ASK signature: {}", e))?;
 
         let chain = Chain { ark, ask };
 
@@ -93,11 +94,15 @@ impl AmdCertificates {
 
             // Verify that VCEK is signed by ASK
             let chain = self.get_chain(processor_model).await?;
-            verify_signature(&chain.ask, &vcek)?;
+            chain
+                .ask
+                .verify(&vcek)
+                .map_err(|e| format!("Failed to verify VCEK signature: {}", e))?;
+
             info!(
                 "VCEK certificate verified successfully for {}",
                 processor_model.titlecase()
-            );
+           );
 
             // Store in cache
             self.vcek_cache.insert(cache_key.clone(), vcek);
@@ -132,18 +137,4 @@ pub(crate) trait CertificateFetcher {
         model: sev::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
-}
-
-/// Verify that subject is signed by issuer
-fn verify_signature(
-    issuer: &Certificate,
-    subject: &Certificate,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use sev::certs::snp::Certificate as SevCertificate;
-    use sev::certs::snp::Verifiable;
-    let issuer = SevCertificate::from_der(&issuer.to_der()?)?;
-    let subject = SevCertificate::from_der(&subject.to_der()?)?;
-    Ok((&issuer, &subject)
-        .verify()
-        .map_err(|e| format!("Error while verifying signature: {}", e))?)
 }

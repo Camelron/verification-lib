@@ -21,6 +21,10 @@ impl CryptoBackend for Crypto {
         openssl::x509::X509::from_der(der).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     }
 
+    fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>> {
+        cert.to_der().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    }
+
     fn verify_chain(
         trusted_certs: Vec<Certificate>,
         untrusted_chain: Vec<Certificate>,

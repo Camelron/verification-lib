@@ -75,6 +75,11 @@ impl CryptoBackend for Crypto {
             .map_err(|e| format!("Failed to parse DER certificate: {:?}", e).into())
     }
 
+    fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>> {
+        cert.to_der()
+            .map_err(|e| format!("Failed to encode certificate as DER: {:?}", e).into())
+    }
+
     fn verify_chain(
         trusted_certs: Vec<Certificate>,
         untrusted_chain: Vec<Certificate>,

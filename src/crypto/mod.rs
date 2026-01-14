@@ -31,6 +31,9 @@ pub trait CryptoBackend {
     /// Parse a certificate from DER-encoded data.
     fn from_der(der: &[u8]) -> Result<Self::Certificate>;
 
+    /// Encode a certificate as DER.
+    fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>>;
+
     /// Verify a certificate chain from `trusted_certs` through `untrusted_chain` to `leaf`.
     fn verify_chain(
         trusted_certs: Vec<Self::Certificate>,

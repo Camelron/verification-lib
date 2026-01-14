@@ -1,4 +1,5 @@
 use crate::{certificate_chain::CertificateFetcher, AttestationReport};
+use crate::crypto::{Certificate, Crypto, CryptoBackend};
 use hex;
 #[cfg(target_arch = "wasm32")]
 use js_sys::{Promise, Uint8Array};
@@ -9,7 +10,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::JsFuture;
-use x509_cert::{der::Decode, Certificate};
 
 /// Cache entry for certificate chain
 type ChainCache = Option<(Certificate, Certificate)>;
@@ -66,9 +66,9 @@ impl CertificateFetcher for KdsFetcher {
         let ark_der = pems[1].contents().to_vec();
         let ask_der = pems[0].contents().to_vec();
 
-        let ark = Certificate::from_der(&ark_der)
+        let ark = Crypto::from_der(&ark_der)
             .map_err(|e| format!("Failed to parse ARK certificate: {}", e))?;
-        let ask = Certificate::from_der(&ask_der)
+        let ask = Crypto::from_der(&ask_der)
             .map_err(|e| format!("Failed to parse ASK certificate: {}", e))?;
 
         // Store in cache if requested
@@ -153,7 +153,7 @@ impl CertificateFetcher for KdsFetcher {
 
         let vcek_bytes = fetch_url_bytes(&vcek_url).await?;
 
-        let vcek = Certificate::from_der(&vcek_bytes)
+        let vcek = Crypto::from_der(&vcek_bytes)
             .map_err(|e| format!("Failed to parse VCEK certificate: {}", e))?;
 
         // Store into cache if requested
