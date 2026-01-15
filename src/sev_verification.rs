@@ -11,7 +11,8 @@ use log::{error, info};
 use std::collections::HashMap;
 
 /// Result of AMD SEV-SNP attestation verification
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SevVerificationResult {
     /// Whether the attestation passed all verification checks
     pub is_valid: bool,
@@ -22,7 +23,8 @@ pub struct SevVerificationResult {
 }
 
 /// Detailed verification results for AMD SEV-SNP attestation
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SevVerificationDetails {
     /// Whether the processor model was identified successfully
     pub processor_identified: bool,

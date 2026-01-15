@@ -1,4 +1,4 @@
-use crate::crypto::{self, Certificate, Verifier};
+use crate::crypto::{Certificate, Verifier};
 use crate::kds::KdsFetcher;
 use crate::{snp, AttestationReport};
 use log::info;

@@ -2,6 +2,7 @@ use std::vec;
 
 use openssl::ecdsa::EcdsaSig;
 use openssl::stack::Stack;
+use openssl::x509::verify::X509VerifyFlags;
 
 use super::{CryptoBackend, Result, Verifier};
 use crate::snp::report::{AttestationReport, Signature};
@@ -35,7 +36,7 @@ impl CryptoBackend for Crypto {
         for cert in trusted_certs {
             store_builder.add_cert(cert)?;
         }
-        store_builder.set_flags(openssl::X509VerifyFlags::PARTIAL_CHAIN);
+        store_builder.set_flags(X509VerifyFlags::PARTIAL_CHAIN)?;
         let store = store_builder.build();
         let mut ctx = openssl::x509::X509StoreContext::new()?;
         let mut chain = Stack::new()?;
