@@ -1,5 +1,5 @@
 use crate::crypto::{Certificate, Crypto, CryptoBackend};
-use crate::snp_cpuid;
+use crate::snp;
 use crate::{certificate_chain::CertificateFetcher, AttestationReport};
 use hex;
 #[cfg(target_arch = "wasm32")]
@@ -44,7 +44,7 @@ impl KdsFetcher {
 impl CertificateFetcher for KdsFetcher {
     async fn fetch_amd_chain(
         &mut self,
-        model: snp_cpuid::Generation,
+        model: snp::model::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>> {
         // Check cache for ARK/ASK
         if self.use_cache {
@@ -80,7 +80,7 @@ impl CertificateFetcher for KdsFetcher {
 
     async fn fetch_amd_vcek(
         &mut self,
-        processor_model: snp_cpuid::Generation,
+        processor_model: snp::model::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>> {
         // Build a cache key using processor model and first 8 bytes of the chip id
@@ -106,7 +106,7 @@ impl CertificateFetcher for KdsFetcher {
             );
         } else {
             match processor_model {
-                snp_cpuid::Generation::Milan | snp_cpuid::Generation::Genoa => {
+                snp::model::Generation::Milan | snp::model::Generation::Genoa => {
                     // Milan and Genoa use full chip_id
                     hex::encode(&attestation_report.chip_id.as_ref()).to_uppercase()
                 }
@@ -118,7 +118,7 @@ impl CertificateFetcher for KdsFetcher {
         };
 
         let vcek_url = match processor_model {
-            snp_cpuid::Generation::Milan | snp_cpuid::Generation::Genoa => {
+            snp::model::Generation::Milan | snp::model::Generation::Genoa => {
                 let tcb = attestation_report.reported_tcb.as_milan_genoa();
                 format!(
                 "https://kdsintf.amd.com/vcek/v1/{}/{}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
@@ -130,7 +130,7 @@ impl CertificateFetcher for KdsFetcher {
                 tcb.microcode
             )
             }
-            snp_cpuid::Generation::Turin => {
+            snp::model::Generation::Turin => {
                 let tcb = attestation_report.reported_tcb.as_turin();
                 format!(
                     "https://kdsintf.amd.com/vcek/v1/{}/{}?fmcSPL={:02}&blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",

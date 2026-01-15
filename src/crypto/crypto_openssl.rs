@@ -3,8 +3,8 @@ use std::vec;
 use openssl::ecdsa::EcdsaSig;
 use openssl::stack::Stack;
 
-use super::super::snp_report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
+use crate::snp::report::{AttestationReport, Signature};
 
 pub struct Crypto;
 
@@ -22,7 +22,8 @@ impl CryptoBackend for Crypto {
     }
 
     fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>> {
-        cert.to_der().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        cert.to_der()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
     }
 
     fn verify_chain(

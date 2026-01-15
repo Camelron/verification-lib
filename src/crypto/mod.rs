@@ -14,7 +14,7 @@ compile_error!(
 );
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-use super::snp_report::AttestationReport;
+use crate::snp::report::AttestationReport;
 
 /// Verifies that data was signed by the implementor's private key.
 pub trait Verifier<T> {

@@ -4,7 +4,7 @@
 //! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
 use crate::certificate_chain::AmdCertificates;
 use crate::crypto::{Certificate, Crypto, CryptoBackend};
-use crate::{snp_cpuid, AttestationReport};
+use crate::{snp, AttestationReport};
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
@@ -116,7 +116,7 @@ impl SevVerifier {
         };
 
         // Step 1: Identify processor model
-        let processor_model = snp_cpuid::Generation::from_family_and_model(
+        let processor_model = snp::model::Generation::from_family_and_model(
             attestation_report.cpuid_fam_id,
             attestation_report.cpuid_mod_id,
         );
@@ -259,12 +259,12 @@ impl SevVerifier {
             Err(format!("Extension OID {} not found in VCEK", oid).into())
         };
 
-        let gen = snp_cpuid::Generation::from_family_and_model(
+        let gen = snp::model::Generation::from_family_and_model(
             attestation_report.cpuid_fam_id,
             attestation_report.cpuid_mod_id,
         )?;
         match gen {
-            snp_cpuid::Generation::Milan | snp_cpuid::Generation::Genoa => {
+            snp::model::Generation::Milan | snp::model::Generation::Genoa => {
                 let tcb = attestation_report.reported_tcb.as_milan_genoa();
                 let bl_oid = SnpOid::BootLoader.oid().to_string();
                 check_u8_ext(bl_oid, tcb.boot_loader)
@@ -282,7 +282,7 @@ impl SevVerifier {
                 check_u8_ext(ucode_oid, tcb.microcode)
                     .map_err(|e| format!("Error verifying TCB microcode: {}", e))?;
             }
-            snp_cpuid::Generation::Turin => {
+            snp::model::Generation::Turin => {
                 let tcb = attestation_report.reported_tcb.as_turin();
                 let bl_oid = SnpOid::BootLoader.oid().to_string();
                 check_u8_ext(bl_oid, tcb.boot_loader)

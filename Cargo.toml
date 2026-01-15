@@ -20,7 +20,7 @@ path = "src/bin/verify_cli.rs"
 default = ["crypto_pure_rust"]
 # If both enabled, defaults to crypto_pure_rust but expose the crypto_openssl module
 crypto_openssl = ["dep:openssl"]
-crypto_pure_rust = ["dep:ecdsa", "dep:rsa"]
+crypto_pure_rust = ["dep:ecdsa", "dep:p384", "dep:rsa"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
@@ -37,9 +37,9 @@ base64 = "0.13"
 bitfield = "0.14"
 
 # Crypto
-p384 = { version = "0.13", features = ["ecdsa"]} # optional after sev removal
 openssl = { version = "0.10", optional = true }
 ecdsa = { version = "0.16", features = ["der", "verifying"], optional = true }
+p384 = { version = "0.13", features = ["ecdsa"], optional = true}
 rsa = { version = "0.9", optional = true }
 
 # WASM / pure-Rust crypto deps

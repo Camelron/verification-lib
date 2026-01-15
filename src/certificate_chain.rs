@@ -1,6 +1,6 @@
-use crate::crypto::{Certificate, Verifier};
+use crate::crypto::{self, Certificate, Verifier};
 use crate::kds::KdsFetcher;
-use crate::{snp_cpuid, AttestationReport};
+use crate::{snp, AttestationReport};
 use log::info;
 use std::collections::HashMap;
 use std::mem::discriminant;
@@ -14,7 +14,7 @@ pub struct Chain {
 
 /// AMD certificate chain representation for SEV-SNP verification
 pub struct AmdCertificates {
-    pub chains_cache: Vec<(snp_cpuid::Generation, Chain)>,
+    pub chains_cache: Vec<(snp::model::Generation, Chain)>,
     /// Versioned Chip Endorsement Key (VCEK) certificates by processor model
     vcek_cache: HashMap<String, Certificate>,
     /// Certificate fetcher
@@ -45,7 +45,7 @@ impl AmdCertificates {
 
     async fn get_chain(
         &mut self,
-        processor_model: snp_cpuid::Generation,
+        processor_model: snp::model::Generation,
     ) -> Result<&Chain, Box<dyn std::error::Error>> {
         let existing_indx = self
             .chains_cache
@@ -74,7 +74,7 @@ impl AmdCertificates {
     /// Get or fetch the VCEK certificate for a given processor model and attestation report
     pub async fn get_vcek(
         &mut self,
-        processor_model: snp_cpuid::Generation,
+        processor_model: snp::model::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<&Certificate, Box<dyn std::error::Error>> {
         // Build cache key from processor model and chip_id
@@ -128,13 +128,13 @@ pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
         &mut self,
-        model: snp_cpuid::Generation,
+        model: snp::model::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>>;
 
     /// Fetch VCEK certificate for a given processor model and attestation report
     async fn fetch_amd_vcek(
         &mut self,
-        model: snp_cpuid::Generation,
+        model: snp::model::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
 }

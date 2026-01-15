@@ -6,7 +6,7 @@ use rsa::{
 use sha2::Sha384;
 use x509_cert::der::{referenced::OwnedToRef, Encode};
 
-use super::super::snp_report::{AttestationReport, Signature};
+use crate::snp::report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
 
 pub struct Crypto;
