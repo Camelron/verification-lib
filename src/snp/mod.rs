@@ -1,4 +1,3 @@
-
-pub mod report;
 pub mod model;
+pub mod report;
 mod utils;

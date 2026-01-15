@@ -13,8 +13,8 @@ pub mod kds;
 
 pub mod sev_verification;
 
-pub use snp::report::AttestationReport;
 pub use crypto::Certificate;
+pub use snp::report::AttestationReport;
 
 // Re-export the main types at crate root for convenient use (wasm only)
 pub use certificate_chain::AmdCertificates;

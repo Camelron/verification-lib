@@ -6,8 +6,8 @@ use rsa::{
 use sha2::Sha384;
 use x509_cert::der::{referenced::OwnedToRef, Encode};
 
-use crate::snp::report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
+use crate::snp::report::{AttestationReport, Signature};
 
 pub struct Crypto;
 
@@ -60,8 +60,8 @@ impl CryptoBackend for Crypto {
 
     fn from_pem(pem: &[u8]) -> Result<Self::Certificate> {
         use x509_cert::der::DecodePem;
-        let pem_str = std::str::from_utf8(pem)
-            .map_err(|e| format!("Invalid UTF-8 in PEM data: {:?}", e))?;
+        let pem_str =
+            std::str::from_utf8(pem).map_err(|e| format!("Invalid UTF-8 in PEM data: {:?}", e))?;
         Certificate::from_pem(pem_str)
             .map_err(|e| format!("Failed to parse PEM certificate: {:?}", e).into())
     }
