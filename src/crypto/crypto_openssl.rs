@@ -35,6 +35,7 @@ impl CryptoBackend for Crypto {
         for cert in trusted_certs {
             store_builder.add_cert(cert)?;
         }
+        store_builder.set_flags(openssl::X509VerifyFlags::PARTIAL_CHAIN);
         let store = store_builder.build();
         let mut ctx = openssl::x509::X509StoreContext::new()?;
         let mut chain = Stack::new()?;
