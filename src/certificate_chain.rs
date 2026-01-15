@@ -1,9 +1,9 @@
+use crate::crypto::{Certificate, Verifier};
 use crate::kds::KdsFetcher;
-use crate::AttestationReport;
+use crate::{snp, AttestationReport};
 use log::info;
 use std::collections::HashMap;
 use std::mem::discriminant;
-use x509_cert::{der::Encode, Certificate};
 
 pub struct Chain {
     /// AMD Root Key (ARK) certificate
@@ -14,7 +14,7 @@ pub struct Chain {
 
 /// AMD certificate chain representation for SEV-SNP verification
 pub struct AmdCertificates {
-    pub chains_cache: Vec<(sev::Generation, Chain)>,
+    pub chains_cache: Vec<(snp::model::Generation, Chain)>,
     /// Versioned Chip Endorsement Key (VCEK) certificates by processor model
     vcek_cache: HashMap<String, Certificate>,
     /// Certificate fetcher
@@ -45,7 +45,7 @@ impl AmdCertificates {
 
     async fn get_chain(
         &mut self,
-        processor_model: sev::Generation,
+        processor_model: snp::model::Generation,
     ) -> Result<&Chain, Box<dyn std::error::Error>> {
         let existing_indx = self
             .chains_cache
@@ -62,7 +62,8 @@ impl AmdCertificates {
             .await
             .map_err(|e| format!("Error fetching chain: {}", e))?;
 
-        verify_signature(&ark, &ask)?;
+        ark.verify(&ask)
+            .map_err(|e| format!("Failed to verify ASK signature: {}", e))?;
 
         let chain = Chain { ark, ask };
 
@@ -73,13 +74,13 @@ impl AmdCertificates {
     /// Get or fetch the VCEK certificate for a given processor model and attestation report
     pub async fn get_vcek(
         &mut self,
-        processor_model: sev::Generation,
+        processor_model: snp::model::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<&Certificate, Box<dyn std::error::Error>> {
         // Build cache key from processor model and chip_id
         let cache_key = format!(
             "{}_{:02x?}",
-            processor_model.titlecase(),
+            processor_model,
             &attestation_report.chip_id[..8]
         );
 
@@ -93,10 +94,14 @@ impl AmdCertificates {
 
             // Verify that VCEK is signed by ASK
             let chain = self.get_chain(processor_model).await?;
-            verify_signature(&chain.ask, &vcek)?;
+            chain
+                .ask
+                .verify(&vcek)
+                .map_err(|e| format!("Failed to verify VCEK signature: {}", e))?;
+
             info!(
                 "VCEK certificate verified successfully for {}",
-                processor_model.titlecase()
+                processor_model
             );
 
             // Store in cache
@@ -123,27 +128,13 @@ pub(crate) trait CertificateFetcher {
     /// Fetch AMD certificate chain (ARK and ASK)
     async fn fetch_amd_chain(
         &mut self,
-        model: sev::Generation,
+        model: snp::model::Generation,
     ) -> Result<(Certificate, Certificate), Box<dyn std::error::Error>>;
 
     /// Fetch VCEK certificate for a given processor model and attestation report
     async fn fetch_amd_vcek(
         &mut self,
-        model: sev::Generation,
+        model: snp::model::Generation,
         attestation_report: &AttestationReport,
     ) -> Result<Certificate, Box<dyn std::error::Error>>;
-}
-
-/// Verify that subject is signed by issuer
-fn verify_signature(
-    issuer: &Certificate,
-    subject: &Certificate,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use sev::certs::snp::Certificate as SevCertificate;
-    use sev::certs::snp::Verifiable;
-    let issuer = SevCertificate::from_der(&issuer.to_der()?)?;
-    let subject = SevCertificate::from_der(&subject.to_der()?)?;
-    Ok((&issuer, &subject)
-        .verify()
-        .map_err(|e| format!("Error while verifying signature: {}", e))?)
 }

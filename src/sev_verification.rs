@@ -3,15 +3,16 @@
 //! This implementation is designed to be compiled only for wasm32 and uses
 //! wasm-bindgen for fetching KDS artifacts via an extension-provided JS bridge.
 use crate::certificate_chain::AmdCertificates;
-use crate::AttestationReport;
+use crate::crypto::{Certificate, Crypto, CryptoBackend};
+use crate::{snp, AttestationReport};
 
 use asn1_rs::{oid, Oid};
 use log::{error, info};
 use std::collections::HashMap;
-use x509_cert::Certificate;
 
 /// Result of AMD SEV-SNP attestation verification
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SevVerificationResult {
     /// Whether the attestation passed all verification checks
     pub is_valid: bool,
@@ -22,7 +23,8 @@ pub struct SevVerificationResult {
 }
 
 /// Detailed verification results for AMD SEV-SNP attestation
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SevVerificationDetails {
     /// Whether the processor model was identified successfully
     pub processor_identified: bool,
@@ -98,45 +100,6 @@ impl SevVerifier {
         }
     }
 
-    // Shared helper: derive processor_model from report
-    pub fn get_processor_model(
-        &self,
-        attestation_report: &AttestationReport,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        if attestation_report.version < 3 {
-            if attestation_report.chip_id.iter().all(|&b| b == 0) {
-                return Err("Attestation report version <3 and chip id is all zeroes".into());
-            } else {
-                if attestation_report.chip_id.len() >= 64
-                    && attestation_report.chip_id[8..64].iter().all(|&b| b == 0)
-                {
-                    return Ok("Turin".to_string());
-                }
-                return Err("Attestation report ambiguous for pre-3 versions".into());
-            }
-        }
-
-        let cpu_fam = attestation_report
-            .cpuid_fam_id
-            .ok_or("Missing CPU family ID")?;
-        let cpu_mod = attestation_report
-            .cpuid_mod_id
-            .ok_or("Missing CPU model ID")?;
-        let processor_model = match cpu_fam {
-            0x19 => match cpu_mod {
-                0x0..=0xF => "Milan",
-                0x10..=0x1F | 0xA0..=0xAF => "Genoa",
-                _ => return Err("Processor model not supported".into()),
-            },
-            0x1A => match cpu_mod {
-                0x0..=0x11 => "Turin",
-                _ => return Err("Processor model not supported".into()),
-            },
-            _ => return Err("Processor family not supported".into()),
-        };
-        Ok(processor_model.to_string())
-    }
-
     pub async fn verify_attestation(
         &mut self,
         attestation_report: &AttestationReport,
@@ -155,25 +118,23 @@ impl SevVerifier {
         };
 
         // Step 1: Identify processor model
-        match self.get_processor_model(attestation_report) {
-            Ok(model) => {
-                result.details.processor_identified = true;
-                result.details.processor_model = Some(model.clone());
-                info!("Identified processor model: {}", model);
-            }
-            Err(e) => {
-                let error = format!("Failed to identify processor model: {}", e);
-                result.errors.push(error.clone());
-                error!("{}", error);
-                return Ok(result);
-            }
+        let processor_model = snp::model::Generation::from_family_and_model(
+            attestation_report.cpuid_fam_id,
+            attestation_report.cpuid_mod_id,
+        );
+        if processor_model.is_err() {
+            let error = format!(
+                "Unsupported processor family/model: {} / {}",
+                attestation_report.cpuid_fam_id, attestation_report.cpuid_mod_id
+            );
+            result.errors.push(error.clone());
+            error!("{}", error);
+            return Ok(result);
         }
 
-        let processor_model = sev::Generation::identify_cpu(
-            attestation_report.cpuid_fam_id.unwrap(),
-            attestation_report.cpuid_mod_id.unwrap(),
-        )
-        .map_err(|e| format!("Unsupported processor model: {}", e))?;
+        let processor_model = processor_model.unwrap();
+        result.details.processor_identified = true;
+        result.details.processor_model = Some(processor_model.to_string());
 
         // Step 2: Get VCEK certificate for this processor (includes chain verification)
         let vcek = match self
@@ -226,17 +187,21 @@ impl SevVerifier {
         attestation_report: &AttestationReport,
         vcek: &Certificate,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use sev::certs::snp::Verifiable;
-        let vcek = sev::certs::snp::Certificate::from_der(&x509_cert::der::Encode::to_der(vcek)?)?;
-        Ok((&vcek, attestation_report)
-            .verify()
-            .map_err(|e| format!("Failed to verify attestation signature: {}", e))?)
+        use crate::crypto::Verifier;
+        vcek.verify(attestation_report)
+            .map_err(|e| format!("Failed to verify attestation signature: {}", e).into())
     }
 
     fn verify_tcb_values(
         vcek: &Certificate,
         attestation_report: &AttestationReport,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use x509_cert::der::Decode;
+
+        let vcek_der = Crypto::to_der(vcek)?;
+        let vcek = x509_cert::Certificate::from_der(&vcek_der)
+            .map_err(|e| format!("Failed to parse VCEK as x509-cert: {}", e))?;
+
         // Get extensions from VCEK certificate
         let extensions = vcek
             .tbs_certificate
@@ -279,59 +244,68 @@ impl SevVerifier {
             false
         };
 
-        let bl_oid = SnpOid::BootLoader.oid().to_string();
-        if let Some(&cert_bl) = ext_map.get(&bl_oid) {
-            if !check_ext(
-                cert_bl,
-                &attestation_report.reported_tcb.bootloader.to_le_bytes(),
-            ) {
-                return Err("Report TCB Boot Loader and Certificate Boot Loader mismatch".into());
-            }
-        }
-
-        let tee_oid = SnpOid::Tee.oid().to_string();
-        if let Some(&cert_tee) = ext_map.get(&tee_oid) {
-            if !check_ext(cert_tee, &attestation_report.reported_tcb.tee.to_le_bytes()) {
-                return Err("Report TCB TEE and Certificate TEE mismatch".into());
-            }
-        }
-
-        let snp_oid = SnpOid::Snp.oid().to_string();
-        if let Some(&cert_snp) = ext_map.get(&snp_oid) {
-            if !check_ext(cert_snp, &attestation_report.reported_tcb.snp.to_le_bytes()) {
-                return Err("Report TCB SNP and Certificate SNP mismatch".into());
-            }
-        }
-
-        let ucode_oid = SnpOid::Ucode.oid().to_string();
-        if let Some(&cert_ucode) = ext_map.get(&ucode_oid) {
-            if !check_ext(
-                cert_ucode,
-                &attestation_report.reported_tcb.microcode.to_le_bytes(),
-            ) {
-                return Err("Report TCB Microcode and Certificate Microcode mismatch".into());
-            }
-        }
-
-        let gen = sev::Generation::identify_cpu(
-            attestation_report.cpuid_fam_id.unwrap(),
-            attestation_report.cpuid_mod_id.unwrap(),
-        )
-        .map_err(|e| format!("Failed to parse cpu: {}", e))?;
-
-        match gen {
-            sev::Generation::Turin => {
-                let fmc_oid = SnpOid::Fmc.oid().to_string();
-                if let Some(&cert_fmc) = ext_map.get(&fmc_oid) {
-                    if !check_ext(
-                        cert_fmc,
-                        &attestation_report.reported_tcb.fmc.unwrap().to_le_bytes(),
-                    ) {
-                        return Err("Report TCB FMC and Certificate FMC mismatch".into());
-                    }
+        let check_u8_ext = |oid: String, expected: u8| -> Result<(), Box<dyn std::error::Error>> {
+            if let Some(&ext_value) = ext_map.get(&oid.to_string()) {
+                let expected = [expected];
+                if check_ext(ext_value, &expected) {
+                    return Ok(());
                 }
+                return Err(format!(
+                    "Mismatched value OID {} : {} != {}",
+                    oid,
+                    hex::encode(ext_value),
+                    hex::encode(&expected)
+                )
+                .into());
             }
-            _ => (),
+            Err(format!("Extension OID {} not found in VCEK", oid).into())
+        };
+
+        let gen = snp::model::Generation::from_family_and_model(
+            attestation_report.cpuid_fam_id,
+            attestation_report.cpuid_mod_id,
+        )?;
+        match gen {
+            snp::model::Generation::Milan | snp::model::Generation::Genoa => {
+                let tcb = attestation_report.reported_tcb.as_milan_genoa();
+                let bl_oid = SnpOid::BootLoader.oid().to_string();
+                check_u8_ext(bl_oid, tcb.boot_loader)
+                    .map_err(|e| format!("Error verifying TCB boot loader: {}", e))?;
+
+                let tee_oid = SnpOid::Tee.oid().to_string();
+                check_u8_ext(tee_oid, tcb.tee)
+                    .map_err(|e| format!("Error verifying TCB TEE: {}", e))?;
+
+                let snp_oid = SnpOid::Snp.oid().to_string();
+                check_u8_ext(snp_oid, tcb.snp)
+                    .map_err(|e| format!("Error verifying TCB SNP: {}", e))?;
+
+                let ucode_oid = SnpOid::Ucode.oid().to_string();
+                check_u8_ext(ucode_oid, tcb.microcode)
+                    .map_err(|e| format!("Error verifying TCB microcode: {}", e))?;
+            }
+            snp::model::Generation::Turin => {
+                let tcb = attestation_report.reported_tcb.as_turin();
+                let bl_oid = SnpOid::BootLoader.oid().to_string();
+                check_u8_ext(bl_oid, tcb.boot_loader)
+                    .map_err(|e| format!("Error verifying TCB boot loader: {}", e))?;
+
+                let tee_oid = SnpOid::Tee.oid().to_string();
+                check_u8_ext(tee_oid, tcb.tee)
+                    .map_err(|e| format!("Error verifying TCB TEE: {}", e))?;
+
+                let snp_oid = SnpOid::Snp.oid().to_string();
+                check_u8_ext(snp_oid, tcb.snp)
+                    .map_err(|e| format!("Error verifying TCB SNP: {}", e))?;
+
+                let ucode_oid = SnpOid::Ucode.oid().to_string();
+                check_u8_ext(ucode_oid, tcb.microcode)
+                    .map_err(|e| format!("Error verifying TCB microcode: {}", e))?;
+
+                let fmc_oid = SnpOid::Fmc.oid().to_string();
+                check_u8_ext(fmc_oid, tcb.fmc)
+                    .map_err(|e| format!("Error verifying TCB FMC: {}", e))?;
+            }
         }
 
         let hwid_oid = SnpOid::HwId.oid().to_string();
