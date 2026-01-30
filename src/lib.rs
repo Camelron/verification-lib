@@ -5,16 +5,14 @@
 //! the `sev_verification` module which contains the verification engine.
 
 pub mod crypto;
-pub mod snp_report;
-
-pub mod certificate_chain;
-
-pub mod kds;
-
 pub mod sev_verification;
+pub mod snp;
 
-pub use sev::firmware::guest::AttestationReport;
-pub use x509_cert::Certificate;
+mod certificate_chain;
+mod kds;
+
+pub use crypto::Certificate;
+pub use snp::report::AttestationReport;
 
 // Re-export the main types at crate root for convenient use (wasm only)
 pub use certificate_chain::AmdCertificates;

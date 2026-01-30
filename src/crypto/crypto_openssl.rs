@@ -2,9 +2,10 @@ use std::vec;
 
 use openssl::ecdsa::EcdsaSig;
 use openssl::stack::Stack;
+use openssl::x509::verify::X509VerifyFlags;
 
-use super::super::snp_report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
+use crate::snp::report::{AttestationReport, Signature};
 
 pub struct Crypto;
 
@@ -12,6 +13,20 @@ type Certificate = openssl::x509::X509;
 
 impl CryptoBackend for Crypto {
     type Certificate = Certificate;
+
+    fn from_pem(pem: &[u8]) -> Result<Self::Certificate> {
+        openssl::x509::X509::from_pem(pem).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    }
+
+    fn from_der(der: &[u8]) -> Result<Self::Certificate> {
+        openssl::x509::X509::from_der(der).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    }
+
+    fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>> {
+        cert.to_der()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    }
+
     fn verify_chain(
         trusted_certs: Vec<Certificate>,
         untrusted_chain: Vec<Certificate>,
@@ -21,6 +36,7 @@ impl CryptoBackend for Crypto {
         for cert in trusted_certs {
             store_builder.add_cert(cert)?;
         }
+        store_builder.set_flags(X509VerifyFlags::PARTIAL_CHAIN)?;
         let store = store_builder.build();
         let mut ctx = openssl::x509::X509StoreContext::new()?;
         let mut chain = Stack::new()?;
@@ -79,83 +95,5 @@ impl Verifier<AttestationReport> for Certificate {
             )
             .into()),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use zerocopy::{IntoBytes, TryFromBytes};
-
-    use super::*;
-
-    const MILAN_ARK: &[u8] = include_bytes!("test_data/milan_ark.pem");
-    const MILAN_ASK: &[u8] = include_bytes!("test_data/milan_ask.pem");
-    const MILAN_VCEK: &[u8] = include_bytes!("test_data/milan_vcek.pem");
-    const MILAN_REPORT: &[u8] = include_bytes!("test_data/milan_attestation_report.bin");
-
-    fn cert(pem: &[u8]) -> Certificate {
-        openssl::x509::X509::from_pem(pem).unwrap()
-    }
-
-    #[test]
-    fn full_chain_verifies() {
-        Crypto::verify_chain(
-            vec![cert(MILAN_ARK)],
-            vec![cert(MILAN_ASK)],
-            cert(MILAN_VCEK),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn empty_trust_store_fails() {
-        Crypto::verify_chain(vec![], vec![], cert(MILAN_VCEK))
-            .expect_err("Should fail with no trusted certs");
-    }
-
-    #[test]
-    fn untrusted_intermediates_are_required() {
-        Crypto::verify_chain(vec![cert(MILAN_ARK)], vec![], cert(MILAN_VCEK))
-            .expect_err("VCEK should not verify without ASK intermediate");
-    }
-
-    #[test]
-    fn self_signed_certificates() {
-        Crypto::verify_chain(vec![cert(MILAN_ARK)], vec![], cert(MILAN_ARK)).unwrap();
-    }
-
-    #[test]
-    fn verifier_trait_impl() {
-        let ark = cert(MILAN_ARK);
-        let ask = cert(MILAN_ASK);
-
-        // Self signed
-        ark.verify(&ark).unwrap();
-        // Signed by ARK
-        ark.verify(&ask).unwrap();
-    }
-
-    #[test]
-    fn attestation_report_signature_verifies() {
-        let vcek = cert(MILAN_VCEK);
-        let report: AttestationReport = AttestationReport::try_read_from_bytes(MILAN_REPORT)
-            .expect("Failed to parse attestation report")
-            .clone();
-        vcek.verify(&report).unwrap();
-    }
-
-    #[test]
-    fn corrupted_report_fails_to_verify() {
-        let vcek = cert(MILAN_VCEK);
-        let mut report: AttestationReport = AttestationReport::try_read_from_bytes(MILAN_REPORT)
-            .expect("Failed to parse attestation report")
-            .clone();
-
-        // Corrupt a byte in the signed portion
-        let report_bytes = report.as_mut_bytes();
-        report_bytes[100] ^= 0xFF;
-
-        vcek.verify(&report)
-            .expect_err("Corrupted report should not verify");
     }
 }

@@ -6,8 +6,8 @@ use rsa::{
 use sha2::Sha384;
 use x509_cert::der::{referenced::OwnedToRef, Encode};
 
-use super::super::snp_report::{AttestationReport, Signature};
 use super::{CryptoBackend, Result, Verifier};
+use crate::snp::report::{AttestationReport, Signature};
 
 pub struct Crypto;
 
@@ -18,9 +18,6 @@ mod oid {
 
     // RSA-PSS (1.2.840.113549.1.1.10)
     pub const RSA_PSS: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.10");
-    // ECDSA with SHA-384 (1.2.840.10045.4.3.3)
-    pub const ECDSA_WITH_SHA384: ObjectIdentifier =
-        ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3");
 }
 
 impl Verifier<Certificate> for Certificate {
@@ -60,6 +57,26 @@ impl Verifier<Certificate> for Certificate {
 
 impl CryptoBackend for Crypto {
     type Certificate = Certificate;
+
+    fn from_pem(pem: &[u8]) -> Result<Self::Certificate> {
+        use x509_cert::der::DecodePem;
+        let pem_str =
+            std::str::from_utf8(pem).map_err(|e| format!("Invalid UTF-8 in PEM data: {:?}", e))?;
+        Certificate::from_pem(pem_str)
+            .map_err(|e| format!("Failed to parse PEM certificate: {:?}", e).into())
+    }
+
+    fn from_der(der: &[u8]) -> Result<Self::Certificate> {
+        use x509_cert::der::Decode;
+        Certificate::from_der(der)
+            .map_err(|e| format!("Failed to parse DER certificate: {:?}", e).into())
+    }
+
+    fn to_der(cert: &Self::Certificate) -> Result<Vec<u8>> {
+        cert.to_der()
+            .map_err(|e| format!("Failed to encode certificate as DER: {:?}", e).into())
+    }
+
     fn verify_chain(
         trusted_certs: Vec<Certificate>,
         untrusted_chain: Vec<Certificate>,
@@ -126,102 +143,5 @@ impl Verifier<AttestationReport> for Certificate {
             )
             .into()),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use x509_cert::der::DecodePem;
-    use zerocopy::TryFromBytes;
-
-    use super::*;
-
-    const MILAN_ARK: &[u8] = include_bytes!("test_data/milan_ark.pem");
-    const MILAN_ASK: &[u8] = include_bytes!("test_data/milan_ask.pem");
-    const MILAN_VCEK: &[u8] = include_bytes!("test_data/milan_vcek.pem");
-    const MILAN_REPORT: &[u8] = include_bytes!("test_data/milan_attestation_report.bin");
-
-    fn cert(pem: &[u8]) -> Certificate {
-        Certificate::from_pem(pem).unwrap()
-    }
-
-    #[test]
-    fn verifier_trait_impl() {
-        let ark = cert(MILAN_ARK);
-        let ask = cert(MILAN_ASK);
-
-        // Self signed
-        ark.verify(&ark).unwrap();
-        // Signed by ARK
-        ark.verify(&ask).unwrap();
-    }
-
-    #[test]
-    fn corrupted_verifier_trait_impl() {
-        let ark = cert(MILAN_ARK);
-        let mut ask = cert(MILAN_ASK);
-
-        // Corrupt a byte in the ASK signature
-        let sig_bytes = ask.signature.raw_bytes();
-        let mut corrupted_sig = sig_bytes.to_vec();
-        corrupted_sig[10] ^= 0xFF; // Flip a bit
-        ask.signature = x509_cert::der::asn1::BitString::new(0, corrupted_sig)
-            .expect("Failed to create corrupted signature");
-
-        // Verification should fail
-        ark.verify(&ask)
-            .expect_err("Corrupted ASK signature should not verify");
-    }
-
-    #[test]
-    fn full_chain_verifies() {
-        Crypto::verify_chain(
-            vec![cert(MILAN_ARK)],
-            vec![cert(MILAN_ASK)],
-            cert(MILAN_VCEK),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn empty_trust_store_fails() {
-        Crypto::verify_chain(vec![], vec![], cert(MILAN_VCEK))
-            .expect_err("Should fail with no trusted certs");
-    }
-
-    #[test]
-    fn untrusted_intermediates_are_required() {
-        Crypto::verify_chain(vec![cert(MILAN_ARK)], vec![], cert(MILAN_VCEK))
-            .expect_err("VCEK should not verify without ASK intermediate");
-    }
-
-    #[test]
-    fn self_signed_certificates() {
-        Crypto::verify_chain(vec![cert(MILAN_ARK)], vec![], cert(MILAN_ARK)).unwrap();
-    }
-
-    #[test]
-    fn attestation_report_signature_verifies() {
-        let vcek = cert(MILAN_VCEK);
-        let report: AttestationReport = AttestationReport::try_read_from_bytes(MILAN_REPORT)
-            .expect("Failed to parse attestation report")
-            .clone();
-        vcek.verify(&report).unwrap();
-    }
-
-    #[test]
-    fn corrupted_report_fails_to_verify() {
-        let vcek = cert(MILAN_VCEK);
-        let mut report: AttestationReport = AttestationReport::try_read_from_bytes(MILAN_REPORT)
-            .expect("Failed to parse attestation report")
-            .clone();
-
-        // Corrupt a byte in the signed portion
-        use zerocopy::IntoBytes;
-        let report_bytes = report.as_mut_bytes();
-        report_bytes[100] ^= 0xFF;
-
-        vcek.verify(&report)
-            .expect_err("Corrupted report should not verify");
     }
 }

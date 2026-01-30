@@ -4,26 +4,20 @@ A WASM-compatible Rust library for AMD SEV-SNP attestation verification.
 
 ## Overview
 
-This library provides cryptographic verification of AMD SEV-SNP (Secure Encrypted Virtualization - Secure Nested Paging) attestation reports. It's designed to run in WebAssembly environments and uses pure-Rust cryptography implementations.
+This library provides cryptographic verification of AMD SEV-SNP (Secure Encrypted Virtualization - Secure Nested Paging) attestation reports. It's designed to run in WebAssembly environments where it uses pure-Rust cryptography implementations and minimal TCB environments where it uses the system's OpenSSL.
 
 ## Features
 
 - **AMD SEV-SNP Attestation Verification**: Validates attestation reports from AMD EPYC processors
-- **Certificate Chain Verification**: Automatically fetches and verifies AMD certificates (ARK → ASK → VCEK) from the AMD Key Distribution Server (KDS)
 - **WASM-Compatible**: Built for `wasm32-unknown-unknown` target with no native dependencies
-- **Caching Support**: Optional caching of certificates to reduce network requests
-
-## Current Limitations
-
-⚠️ **This library currently only supports AMD EPYC Milan (7xx3) processors.** The certificate chain is fetched directly from the KDS Milan endpoint. Support for other processor models (Genoa, Turin, etc.) requires fetching their respective certificate chains, which is not yet implemented.
+- **Low TCB**: Feature flags for `crypto-openssl` in comparison to `crypto-pure-rust` and useful but unnecessary dependencies such as `serde`
 
 ## Usage
 
 ```rust
-use verification_lib::verify_attestation_report;
+use sev_verification::verify_attestation;
 
-// Parse and verify an attestation report
-let result = verify_attestation_report(&attestation_json).await?;
+let result = verify_attestation(attestation_bytes).await?;
 
 if result.is_valid {
     println!("Attestation verified successfully!");
@@ -40,6 +34,11 @@ Build for WebAssembly:
 cargo build --target wasm32-unknown-unknown --release
 ```
 
+Include the low TCB variant in another project:
+```toml
+verification-lib = { default-features = false, features = ["crypto_openssl"], ...}
+```
+
 ## Verification Process
 
 The library performs the following verification steps:
@@ -49,13 +48,6 @@ The library performs the following verification steps:
 3. **Certificate Chain Validation**: Verifies ARK is self-signed, ASK is signed by ARK, and VCEK is signed by ASK
 4. **Signature Verification**: Validates the attestation report signature using the VCEK public key
 5. **TCB Verification**: Confirms Trusted Computing Base (TCB) values in the report match the VCEK certificate extensions
-
-## Dependencies
-
-- **x509-cert**: X.509 certificate parsing
-- **p384**: ECDSA P-384 cryptography (used by AMD SEV-SNP)
-- **sev**: AMD SEV types and utilities
-- **wasm-bindgen**: WebAssembly bindings
 
 ## Contributing
 
