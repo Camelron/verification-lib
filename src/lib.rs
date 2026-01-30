@@ -5,13 +5,11 @@
 //! the `sev_verification` module which contains the verification engine.
 
 pub mod crypto;
+pub mod sev_verification;
 pub mod snp;
 
-pub mod certificate_chain;
-
-pub mod kds;
-
-pub mod sev_verification;
+mod certificate_chain;
+mod kds;
 
 pub use crypto::Certificate;
 pub use snp::report::AttestationReport;
