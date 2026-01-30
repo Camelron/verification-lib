@@ -110,7 +110,7 @@ impl CertificateFetcher for KdsFetcher {
                     // Milan and Genoa use full chip_id
                     hex::encode(&attestation_report.chip_id.as_ref()).to_uppercase()
                 }
-                _ => {
+                snp::model::Generation::Turin => {
                     // Turin uses only first 8 bytes of chip_id
                     hex::encode(&attestation_report.chip_id[0..8]).to_uppercase()
                 }
